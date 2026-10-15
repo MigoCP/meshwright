@@ -124,6 +124,13 @@ def faceted_part(sides=16, width=1.0):
     ])
 
 
+def pyramid(base=1.0, height=1.0, apex=(0.2, 0.1)):
+    """Square-based pyramid with its apex off-centre, so its four sides all slope differently."""
+    h = 0.5 * base
+    pts = [(-h, -h, 0.0), (h, -h, 0.0), (h, h, 0.0), (-h, h, 0.0), (apex[0], apex[1], height)]
+    return convex_hull(pts)
+
+
 def box(size=(1.0, 1.0, 1.0)):
     sx, sy, sz = size
     pts = [(x, y, z) for x in (0, sx) for y in (0, sy) for z in (0, sz)]
