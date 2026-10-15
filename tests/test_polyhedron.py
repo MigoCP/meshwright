@@ -430,3 +430,57 @@ def test_no_faces_and_no_facets():
     v, f = shapes.box().as_lists()
     res = ph.offset_solid(v, f, facets=[])
     assert res.status == 3 and "no flat facets" in str(res.report)
+
+
+# ---------------------------------------------------------------- faces with holes
+
+def square_frame():
+    """A 2 x 2 x 1 block with a 1 x 1 square hole through it, as a Polyhedron with holes."""
+    v = []
+    for z in (0.0, 1.0):
+        v += [(0, 0, z), (2, 0, z), (2, 2, z), (0, 2, z)]                  # outer: 0..3 and 8..11
+        v += [(0.5, 0.5, z), (1.5, 0.5, z), (1.5, 1.5, z), (0.5, 1.5, z)]  # inner: 4..7 and 12..15
+    faces = [[8, 9, 10, 11], [3, 2, 1, 0]]
+    holes = [[[15, 14, 13, 12]], [[4, 5, 6, 7]]]  # top and bottom, holes clockwise seen from outside
+    for k in range(4):  # outer walls
+        a, b = k, (k + 1) % 4
+        faces.append([a, b, b + 8, a + 8])
+        holes.append([])
+    for k in range(4):  # walls of the hole, facing into it
+        a, b = 4 + k, 4 + (k + 1) % 4
+        faces.append([b, a, a + 8, b + 8])
+        holes.append([])
+    return ph.Polyhedron(v, faces, holes=holes)
+
+
+def test_faces_with_holes_measure_right():
+    p = square_frame()
+    assert ph.closed_problems(p) == []
+    assert abs(p.volume() - 3.0) < 1e-12
+    assert abs(p.area() - (2 * 3.0 + 4 * 2.0 + 4 * 1.0)) < 1e-12
+    n, d, flat = p.plane(0)
+    assert n == (0.0, 0.0, 1.0) and d == 1.0 and flat == 0.0
+    assert len(p.edge_lengths()) == 24
+
+
+def test_triangles_of_faces_with_holes_close_the_solid():
+    from meshwright.core.topology import EdgeCensus, signed_volume
+    v, tris = square_frame().triangles()
+    assert EdgeCensus(tris).closed
+    assert abs(signed_volume(v, tris) - 3.0) < 1e-12
+
+
+def test_merge_drops_a_collapsed_hole():
+    # Shrink the hole to 2e-5 across: merging within 1e-4 removes it, walls and all.
+    p = square_frame()
+    v = [(1 + (x - 1) * 2e-5, 1 + (y - 1) * 2e-5, z) if 0.4 < x < 1.6 and 0.4 < y < 1.6 else (x, y, z)
+         for x, y, z in p.vertices]
+    merged = ph.merge_corners(ph.Polyhedron(v, p.faces, holes=p.holes), 1e-4)
+    assert merged.holes[0] == [] and merged.holes[1] == []
+    assert len(merged.faces) == 6
+    assert ph.closed_problems(merged) == []
+
+
+def test_clip_refuses_faces_with_holes():
+    with pytest.raises(ValueError):
+        ph.clip(square_frame(), (1.0, 0.0, 0.0), 1.0)

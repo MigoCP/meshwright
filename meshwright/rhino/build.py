@@ -1,6 +1,6 @@
 """Polyhedron faces to a closed Rhino Brep.
 
-First try: one planar Brep per face, joined. That gives the cleanest result
+First try: one planar Brep per face (with its holes), joined. That gives the cleanest result
 (one Brep face per polyhedron face, exact edges). When Rhino will not make or
 join the planar faces, the same faces go through a welded mesh instead, which
 cannot leave gaps, and its coplanar triangles are merged back into flat faces.
@@ -35,12 +35,15 @@ def polyhedron_to_brep(poly, tolerance):
 
 
 def _from_planar_faces(poly, tolerance):
-    """One planar Brep per face, joined; None unless that gives one closed solid."""
+    """One planar Brep per face (holes included), joined; None unless that gives one closed solid."""
     pieces = []
-    for polygon in poly.polygons():
-        points = [rg.Point3d(p[0], p[1], p[2]) for p in polygon]
-        points.append(points[0])
-        made = rg.Brep.CreatePlanarBreps(rg.PolylineCurve(points), tolerance)
+    for k in range(len(poly.faces)):
+        curves = []
+        for loop in poly.loop_points(k):
+            points = [rg.Point3d(p[0], p[1], p[2]) for p in loop]
+            points.append(points[0])
+            curves.append(rg.PolylineCurve(points))
+        made = rg.Brep.CreatePlanarBreps(curves[0] if len(curves) == 1 else curves, tolerance)
         if not made or len(made) != 1:
             return None
         pieces.append(made[0])

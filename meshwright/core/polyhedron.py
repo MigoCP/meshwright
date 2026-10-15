@@ -40,7 +40,7 @@ from __future__ import absolute_import, division
 
 import math
 
-from . import vec
+from . import poly2d, vec
 from .facets import cluster_planes
 from .report import Report
 from .topology import UnionFind, bounding_size
@@ -63,63 +63,110 @@ class Polyhedron(object):
 
     vertices  (x, y, z) tuples
     faces     lists of vertex indices, counter-clockwise seen from outside
-    labels    per face, what made it: the index of the cutting plane, or None
-              for a face left over from the starting box
+    holes     per face, its inner loops (lists of vertex indices, clockwise
+              seen from outside); empty for faces without holes
+    labels    per face, what made it: the index of the cutting plane or facet,
+              or None for a face left over from the starting box
     """
 
-    def __init__(self, vertices, faces, labels=None):
+    def __init__(self, vertices, faces, labels=None, holes=None):
         self.vertices = list(vertices)
         self.faces = [list(f) for f in faces]
         self.labels = list(labels) if labels is not None else [None] * len(self.faces)
+        if holes is None:
+            self.holes = [[] for _ in self.faces]
+        else:
+            self.holes = [[list(h) for h in hs] for hs in holes]
+
+    def loops(self, k):
+        """Face k's outer loop followed by its holes, as vertex index lists."""
+        return [self.faces[k]] + self.holes[k]
+
+    def all_loops(self):
+        for k in range(len(self.faces)):
+            for loop in self.loops(k):
+                yield loop
 
     def polygon(self, k):
+        """Corner points of face k's outer loop."""
         return [self.vertices[i] for i in self.faces[k]]
 
-    def polygons(self):
-        return [self.polygon(k) for k in range(len(self.faces))]
+    def loop_points(self, k):
+        """Corner points of every loop of face k, outer loop first."""
+        return [[self.vertices[i] for i in loop] for loop in self.loops(k)]
+
+    def area_vector(self, k):
+        """Face k's normal scaled by its area (holes subtracted)."""
+        total = (0.0, 0.0, 0.0)
+        for pts in self.loop_points(k):
+            total = vec.add(total, vec.area_vector(pts))
+        return total
 
     def plane(self, k):
         """(unit normal, offset, flatness) of face k: the Newell normal, the mean
         offset of its corners and their largest distance from that plane.
         None for a face with no area."""
-        poly = self.polygon(k)
-        n = vec.unit(vec.area_vector(poly))
+        n = vec.unit(self.area_vector(k))
         if n is None:
             return None
-        ds = [vec.dot(n, p) for p in poly]
+        ds = [vec.dot(n, p) for pts in self.loop_points(k) for p in pts]
         d = sum(ds) / len(ds)
         return n, d, max(abs(x - d) for x in ds)
 
     def triangles(self):
-        """(vertices, triangles): each face split into a fan from its first corner."""
+        """(vertices, triangles) covering every face, holes left open.
+
+        A convex face without holes is split into a fan; other faces are
+        triangulated in their plane (poly2d.triangulate)."""
         tris = []
-        for f in self.faces:
-            for i in range(1, len(f) - 1):
-                tris.append((f[0], f[i], f[i + 1]))
+        for k, f in enumerate(self.faces):
+            if not self.holes[k] and self._convex(k):
+                for i in range(1, len(f) - 1):
+                    tris.append((f[0], f[i], f[i + 1]))
+                continue
+            n = vec.unit(self.area_vector(k))
+            if n is None:
+                continue
+            u, v = vec.perpendicular_pair(n)
+            ids = [i for loop in self.loops(k) for i in loop]
+            flat = [[(vec.dot(self.vertices[i], u), vec.dot(self.vertices[i], v)) for i in loop]
+                    for loop in self.loops(k)]
+            for a, b, c in poly2d.triangulate(flat[0], flat[1:]):
+                tris.append((ids[a], ids[b], ids[c]))
         return list(self.vertices), tris
+
+    def _convex(self, k):
+        f = self.faces[k]
+        n = self.area_vector(k)
+        m = len(f)
+        for i in range(m):
+            a, b, c = self.vertices[f[i - 1]], self.vertices[f[i]], self.vertices[f[(i + 1) % m]]
+            if vec.dot(vec.cross(vec.sub(b, a), vec.sub(c, b)), n) < 0.0:
+                return False
+        return True
 
     def volume(self):
         if not self.faces:
             return 0.0
         ref = vec.mean(self.vertices)
         total = 0.0
-        for f in self.faces:
-            a = vec.sub(self.vertices[f[0]], ref)
-            for i in range(1, len(f) - 1):
-                b = vec.sub(self.vertices[f[i]], ref)
-                c = vec.sub(self.vertices[f[i + 1]], ref)
+        for loop in self.all_loops():
+            a = vec.sub(self.vertices[loop[0]], ref)
+            for i in range(1, len(loop) - 1):
+                b = vec.sub(self.vertices[loop[i]], ref)
+                c = vec.sub(self.vertices[loop[i + 1]], ref)
                 total += vec.dot(a, vec.cross(b, c))
         return total / 6.0
 
     def area(self):
-        return sum(vec.length(vec.area_vector(self.polygon(k))) for k in range(len(self.faces)))
+        return sum(vec.length(self.area_vector(k)) for k in range(len(self.faces)))
 
     def edge_lengths(self):
         """Length of every edge, each counted once."""
         out = []
-        for f in self.faces:
-            for k in range(len(f)):
-                a, b = f[k], f[(k + 1) % len(f)]
+        for loop in self.all_loops():
+            for k in range(len(loop)):
+                a, b = loop[k], loop[(k + 1) % len(loop)]
                 if a < b:
                     out.append(vec.distance(self.vertices[a], self.vertices[b]))
         return out
@@ -141,7 +188,7 @@ def box(lo, hi):
 # ---------------------------------------------------------------- clipping
 
 def clip(poly, normal, offset, eps=0.0, label=None):
-    """The part of a convex polyhedron where dot(normal, p) <= offset.
+    """The part of a convex polyhedron (faces without holes) where dot(normal, p) <= offset.
 
     Corners within eps of the plane count as lying on it. Returns
     (polyhedron, problem): the polyhedron itself when nothing lies outside,
@@ -153,6 +200,8 @@ def clip(poly, normal, offset, eps=0.0, label=None):
     groups (a chain of corners all within a hair of the plane), those count
     as lying on it, provided they are no further out than ISLAND_EPS x eps.
     """
+    if any(poly.holes):
+        raise ValueError("clip() works on convex polyhedra, which have no faces with holes")
     dist = [vec.dot(normal, p) - offset for p in poly.vertices]
     if not dist or max(dist) <= eps:
         return poly, None
@@ -248,22 +297,27 @@ def _one_outside_group(poly, dist, side, island):
     return True
 
 
-def _compact(vertices, faces, labels):
+def _compact(vertices, faces, labels, holes=None):
     """Drop unused vertices and renumber, keeping the order they are first used in."""
     new_index = {}
     out_vertices = []
-    out_faces = []
-    for f in faces:
+
+    def renumber(loop):
         g = []
-        for i in f:
+        for i in loop:
             k = new_index.get(i)
             if k is None:
                 k = len(out_vertices)
                 new_index[i] = k
                 out_vertices.append(vertices[i])
             g.append(k)
-        out_faces.append(g)
-    return Polyhedron(out_vertices, out_faces, labels)
+        return g
+
+    out_faces = [renumber(f) for f in faces]
+    out_holes = None
+    if holes is not None:
+        out_holes = [[renumber(h) for h in hs] for hs in holes]
+    return Polyhedron(out_vertices, out_faces, labels, out_holes)
 
 
 def intersect_planes(planes, lo, hi, eps=0.0, order=None):
@@ -284,11 +338,13 @@ def intersect_planes(planes, lo, hi, eps=0.0, order=None):
 
 # ---------------------------------------------------------------- merge and checks
 
-def merge_corners(poly, distance):
-    """Join corners closer than distance (transitively) at their mean point.
+def merge_corners(poly, distance, place=None):
+    """Join corners closer than distance (transitively).
 
-    Faces that collapse to fewer than three corners are dropped. The result
-    is not checked here: run validate() on it.
+    A merged corner goes to place(indices of the joined corners), or to
+    their mean point without a place function. Faces whose outer loop
+    collapses to fewer than three corners are dropped, and so are holes that
+    collapse. The result is not checked here: run validate() on it.
     """
     count = len(poly.vertices)
     uf = UnionFind(count)
@@ -307,26 +363,38 @@ def merge_corners(poly, distance):
             grid.setdefault(key, []).append(i)
     groups = uf.groups()
     if len(groups) == count:
-        return Polyhedron(poly.vertices, poly.faces, poly.labels)
+        return Polyhedron(poly.vertices, poly.faces, poly.labels, poly.holes)
     target = [0] * count
     vertices = []
     for g in groups:
         for i in g:
             target[i] = len(vertices)
-        vertices.append(vec.mean([poly.vertices[i] for i in g]))
-    faces, labels = [], []
-    for f, lab in zip(poly.faces, poly.labels):
+        if len(g) == 1:
+            vertices.append(poly.vertices[g[0]])
+        elif place is not None:
+            vertices.append(place(g))
+        else:
+            vertices.append(vec.mean([poly.vertices[i] for i in g]))
+
+    def mapped(loop):
         g = []
-        for i in f:
+        for i in loop:
             t = target[i]
             if not g or g[-1] != t:
                 g.append(t)
         while len(g) > 1 and g[0] == g[-1]:
             g.pop()
-        if len(g) >= 3:
-            faces.append(g)
-            labels.append(lab)
-    return _compact(vertices, faces, labels)
+        return g if len(g) >= 3 else None
+
+    faces, labels, holes = [], [], []
+    for k, lab in enumerate(poly.labels):
+        outer = mapped(poly.faces[k])
+        if outer is None:
+            continue
+        faces.append(outer)
+        labels.append(lab)
+        holes.append([h for h in (mapped(loop) for loop in poly.holes[k]) if h is not None])
+    return _compact(vertices, faces, labels, holes)
 
 
 def closed_problems(poly):
@@ -336,12 +404,14 @@ def closed_problems(poly):
         problems.append("fewer than 4 faces")
     edges = {}
     pinched = 0
-    for f in poly.faces:
-        if len(set(f)) != len(f):
+    for k in range(len(poly.faces)):
+        corners = [i for loop in poly.loops(k) for i in loop]
+        if len(set(corners)) != len(corners):
             pinched += 1
-        for k in range(len(f)):
-            e = (f[k], f[(k + 1) % len(f)])
-            edges[e] = edges.get(e, 0) + 1
+        for loop in poly.loops(k):
+            for j in range(len(loop)):
+                e = (loop[j], loop[(j + 1) % len(loop)])
+                edges[e] = edges.get(e, 0) + 1
     if pinched:
         problems.append("%d %s pinched (a corner used twice)" % (pinched, _faces_word(pinched)))
     doubled = sum(1 for c in edges.values() if c > 1)

@@ -360,16 +360,19 @@ class Brep(object):
         return [poly for face in self.Faces for poly in face]
 
     @staticmethod
-    def CreatePlanarBreps(curve, tolerance):
-        if Brep.fail_planar or not curve.IsClosed:
+    def CreatePlanarBreps(curves, tolerance):
+        """One planar face from a closed curve, or from a list of them (outer loop first, then holes)."""
+        if not isinstance(curves, (list, tuple)):
+            curves = [curves]
+        if Brep.fail_planar or not all(c.IsClosed for c in curves):
             return None
-        poly = [p._a() for p in curve.points[:-1]]
+        loops = [[p._a() for p in c.points[:-1]] for c in curves]
         normal = np.zeros(3)
-        for i in range(len(poly)):
-            normal += np.cross(poly[i], poly[(i + 1) % len(poly)])
+        for i in range(len(loops[0])):
+            normal += np.cross(loops[0][i], loops[0][(i + 1) % len(loops[0])])
         if np.linalg.norm(normal) <= tolerance * tolerance:
             return None
-        return [Brep([[poly]])]
+        return [Brep([loops])]
 
     @staticmethod
     def JoinBreps(breps, tolerance):
@@ -424,22 +427,42 @@ class Brep(object):
                 poly.reverse()
 
     def MergeCoplanarFaces(self, tolerance):
-        """Group faces by plane (normal and offset rounded to the tolerance)."""
-        groups = {}
-        order = []
-        for face in self.Faces:
+        """Join faces that share an edge and lie on the same plane (normal and
+        offset rounded to the tolerance)."""
+        def key_of(p):
+            return tuple(np.round(p / max(self.tolerance, 1e-12)).astype(int))
+        plane_keys, edge_faces = [], {}
+        for fi, face in enumerate(self.Faces):
             poly = face[0]
             n = np.zeros(3)
             for i in range(len(poly)):
                 n += np.cross(poly[i], poly[(i + 1) % len(poly)])
             n = n / np.linalg.norm(n)
-            key = (tuple(np.round(n / 1e-6).astype(int)), int(round(np.dot(n, poly[0]) / tolerance)))
-            if key not in groups:
-                groups[key] = []
-                order.append(key)
-            groups[key].extend(face)
+            plane_keys.append((tuple(np.round(n / 1e-6).astype(int)), int(round(np.dot(n, poly[0]) / tolerance))))
+            for loop in face:
+                for i in range(len(loop)):
+                    e = tuple(sorted((key_of(loop[i]), key_of(loop[(i + 1) % len(loop)]))))
+                    edge_faces.setdefault(e, []).append(fi)
+        parent = list(range(len(self.Faces)))
+
+        def find(i):
+            while parent[i] != i:
+                i = parent[i]
+            return i
+        for fs in edge_faces.values():
+            for a in fs:
+                for b in fs:
+                    if a != b and plane_keys[a] == plane_keys[b]:
+                        parent[find(a)] = find(b)
+        groups, order = {}, []
+        for fi, face in enumerate(self.Faces):
+            r = find(fi)
+            if r not in groups:
+                groups[r] = []
+                order.append(r)
+            groups[r].extend(face)
         merged = len(order) < len(self.Faces)
-        self.Faces = _BrepFaces(groups[k] for k in order)
+        self.Faces = _BrepFaces(groups[r] for r in order)
         return merged
 
 
