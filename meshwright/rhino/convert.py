@@ -53,6 +53,30 @@ def lists_to_mesh(vertices, faces):
     return mesh
 
 
+def to_vector(v):
+    return rg.Vector3d(v[0], v[1], v[2])
+
+
+def from_vector(v):
+    """(x, y, z) from a Vector3d, a Plane (its Z axis) or a 3-sequence; None if none of those."""
+    if v is None:
+        return None
+    if hasattr(v, "ZAxis"):
+        v = v.ZAxis
+    if hasattr(v, "X"):
+        return (float(v.X), float(v.Y), float(v.Z))
+    try:
+        return (float(v[0]), float(v[1]), float(v[2]))
+    except (TypeError, IndexError, ValueError):
+        return None
+
+
+def to_plane(origin, frame):
+    """A Rhino plane at origin with axes frame = (x, y, z)."""
+    x, y, _ = frame
+    return rg.Plane(rg.Point3d(origin[0], origin[1], origin[2]), to_vector(x), to_vector(y))
+
+
 def document_tolerance(default=0.001):
     """The active document's absolute tolerance, or default outside Rhino."""
     try:

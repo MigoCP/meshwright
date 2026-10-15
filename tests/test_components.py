@@ -37,3 +37,28 @@ def test_mesh_health_component_defaults_when_inputs_missing():
 def test_mesh_health_component_no_mesh():
     out = run_component("MeshHealth", M=None, Tol=None)
     assert out["Status"] == 3 and out["OK"] is False and out["Clean"] is None
+
+
+def test_natural_axis_component_detects_and_checks():
+    g = shapes.rng(1)
+    placed, rot = shapes.randomly_placed(shapes.faceted_part(), g)
+    truth = rot.dot((0.0, 0.0, 1.0))
+    mesh = rg.Mesh.from_trimesh(placed)
+    out = run_component("NaturalAxis", M=mesh)
+    assert out["Status"] == 0
+    axis = (out["Axis"].X, out["Axis"].Y, out["Axis"].Z)
+    assert abs(sum(a * b for a, b in zip(axis, truth)) - 1.0) < 1e-6
+    assert out["Frame"].ZAxis.X == out["Axis"].X
+    # Checking a wrong axis given as a plane: messy, and the given axis is kept.
+    plane = rg.Plane(rg.Point3d(0, 0, 0), rg.Vector3d(1.0, 0.0, 0.0))
+    out = run_component("NaturalAxis", M=mesh, A=plane)
+    assert out["Status"] == 2 and "off the detected one" in out["Info"]
+    assert abs(abs(out["Axis"].X) - 1.0) < 1e-9
+
+
+def test_natural_axis_component_reports_mesh_problems_too():
+    g = shapes.rng(2)
+    mesh = rg.Mesh.from_trimesh(shapes.with_junk(shapes.faceted_part(), g, 1))
+    out = run_component("NaturalAxis", M=mesh)
+    assert out["Status"] == 1 and "mesh: dropped 1 loose bit" in out["Info"]
+    assert run_component("NaturalAxis", M=None)["Status"] == 3
