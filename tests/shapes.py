@@ -131,6 +131,62 @@ def pyramid(base=1.0, height=1.0, apex=(0.2, 0.1)):
     return convex_hull(pts)
 
 
+def ball(sides=24, bands=12, radius=1.0):
+    """A faceted ball: loops of latitude from pole to pole."""
+    levels = [(-radius, 1, 0.0)]
+    for k in range(1, bands):
+        a = math.pi * k / bands
+        levels.append((-radius * math.cos(a), sides, radius * math.sin(a)))
+    levels.append((radius, 1, 0.0))
+    return stacked_loops(levels)
+
+
+def cylinder(sides=48, radius=1.0, height=2.0):
+    return stacked_loops([(0.0, sides, radius), (height, sides, radius)])
+
+
+def lofted(levels, sides):
+    """Closed solid through loops of equal side count, bottom to top, joined by
+    quads and capped by fans: unlike stacked_loops, hollows are kept.
+    levels: (z, radius_x, radius_y) bottom to top."""
+    verts, faces = [], []
+    for z, rx, ry in levels:
+        verts.extend(loop(z, sides, rx, ry))
+    for k in range(len(levels) - 1):
+        a, b = k * sides, (k + 1) * sides
+        for i in range(sides):
+            j = (i + 1) % sides
+            faces.append((a + i, a + j, b + j))
+            faces.append((a + i, b + j, b + i))
+    bottom, top = len(verts), len(verts) + 1
+    verts.append((0.0, 0.0, levels[0][0]))
+    verts.append((0.0, 0.0, levels[-1][0]))
+    last = (len(levels) - 1) * sides
+    for i in range(sides):
+        j = (i + 1) % sides
+        faces.append((bottom, j, i))
+        faces.append((top, last + i, last + j))
+    return TriMesh(verts, faces)
+
+
+def hourglass(sides=32, radius=1.0, waist=0.4, height=2.0):
+    """Wide at both ends, narrow in the middle: a profile that goes in and out."""
+    return lofted([(0.0, radius, radius), (0.5 * height, waist, waist), (height, radius, radius)], sides)
+
+
+def wedge(length=2.0, width=1.0, depth=1.0):
+    """A flat top tapering down to a straight ridge."""
+    a, b = 0.5 * length, 0.5 * width
+    return convex_hull([(-a, -b, 0.0), (a, -b, 0.0), (a, b, 0.0), (-a, b, 0.0),
+                        (-a, 0.0, -depth), (a, 0.0, -depth)])
+
+
+def oval_part(sides=48):
+    """Like faceted_part, but with an oval widest band."""
+    return stacked_loops([(0.16, sides // 2, 0.3, 0.2), (0.02, sides, 0.5, 0.35),
+                          (0.0, sides, 0.5, 0.35), (-0.43, 1, 0.0)])
+
+
 def box(size=(1.0, 1.0, 1.0)):
     sx, sy, sz = size
     pts = [(x, y, z) for x in (0, sx) for y in (0, sy) for z in (0, sz)]
