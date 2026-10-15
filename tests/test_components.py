@@ -98,3 +98,29 @@ def test_mesh_to_solid_component_failures():
     assert out["Status"] == 3 and out["Solid"] is None
     assert run_component("MeshToSolid", M=None)["Status"] == 3
 
+
+def test_clearance_solid_component():
+    g = shapes.rng(11)
+    placed, rot = shapes.randomly_placed(shapes.faceted_part(), g)
+    mesh = rg.Mesh.from_trimesh(placed)
+    up = rot.dot((0.0, 0.0, 1.0))
+    out = run_component("ClearanceSolid", M=mesh, Clr=0.03, A=rg.Vector3d(*up), Tol=0.001)
+    assert out["Status"] == 0, out["Info"]
+    assert out["Solid"].IsSolid
+    assert len(out["Sections"]) >= 4 and all(s.IsClosed for s in out["Sections"])
+    # Without A the part's natural axis is found first.
+    out = run_component("ClearanceSolid", M=mesh, Clr=0.03)
+    assert out["Status"] == 0 and "solid: the bottom tapers to a point" in out["Info"]
+    assert run_component("ClearanceSolid", M=None)["Status"] == 3
+
+
+def test_profile_fit_component():
+    mesh = rg.Mesh.from_trimesh(shapes.faceted_part())
+    out = run_component("ProfileFit", M=mesh, A=rg.Vector3d(0, 0, 1), D=rg.Vector3d(1, 0, 0))
+    assert out["Status"] == 0
+    assert len(out["Lines"]) == 3 and len(out["Knees"]) == 2
+    zs = sorted(k.Z for k in out["Knees"])
+    assert abs(zs[0] - 0.0) < 1e-6 and abs(zs[1] - 0.02) < 1e-6
+    assert out["Profile"].Count > 8
+    assert run_component("ProfileFit", M=None)["Status"] == 3
+
