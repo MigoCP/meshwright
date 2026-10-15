@@ -184,6 +184,33 @@ def l_block(size=2.0, notch=1.0, height=1.0):
     return prism([(0, 0), (s, 0), (s, s - k), (s - k, s - k), (s - k, s), (0, s)], height)
 
 
+def subdivided(mesh, times=1):
+    """Split every triangle into four (edge midpoints), keeping the shape exactly.
+
+    Turns a coarse mesh into a dense one like a scan, so noise then roughens
+    flat regions the way it does on real data.
+    """
+    verts = [tuple(v) for v in mesh.vertices]
+    faces = [tuple(int(i) for i in f) for f in mesh.faces]
+    for _ in range(times):
+        midpoint = {}
+
+        def mid(a, b):
+            key = (min(a, b), max(a, b))
+            if key not in midpoint:
+                pa, pb = verts[a], verts[b]
+                verts.append(tuple((pa[k] + pb[k]) / 2.0 for k in range(3)))
+                midpoint[key] = len(verts) - 1
+            return midpoint[key]
+
+        new_faces = []
+        for a, b, c in faces:
+            ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
+            new_faces += [(a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)]
+        faces = new_faces
+    return TriMesh(verts, faces)
+
+
 # ---------------------------------------------------------------- transforms
 
 def rng(seed=0):
