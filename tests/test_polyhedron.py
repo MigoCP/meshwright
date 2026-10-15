@@ -484,3 +484,38 @@ def test_merge_drops_a_collapsed_hole():
 def test_clip_refuses_faces_with_holes():
     with pytest.raises(ValueError):
         ph.clip(square_frame(), (1.0, 0.0, 0.0), 1.0)
+
+
+# ---------------------------------------------------------------- coplanar faces
+
+def test_merge_coplanar_joins_a_triangulated_box_into_six_faces():
+    tri_box = from_trimesh(shapes.box((2.0, 3.0, 1.0)))
+    assert len(tri_box.faces) == 12
+    merged = ph.merge_coplanar(tri_box, 1e-12)
+    assert len(merged.faces) == 6 and all(len(f) == 4 for f in merged.faces)
+    assert ph.closed_problems(merged) == []
+    assert abs(merged.volume() - 6.0) < 1e-12
+
+
+def test_merge_coplanar_makes_a_face_with_a_hole():
+    # The top of a frame given as four trapezoids around the hole.
+    p = square_frame()
+    v, faces, holes = p.vertices, p.faces[1:], p.holes[1:]
+    outer, inner = [8, 9, 10, 11], [12, 13, 14, 15]
+    for k in range(4):
+        a, b = outer[k], outer[(k + 1) % 4]
+        c, d = inner[(k + 1) % 4], inner[k]
+        faces = faces + [[a, b, c, d]]
+        holes = holes + [[]]
+    split = ph.Polyhedron(v, faces, holes=holes)
+    assert ph.closed_problems(split) == []
+    merged = ph.merge_coplanar(split, 1e-12)
+    assert len(merged.faces) == 10
+    top = [k for k in range(len(merged.faces)) if merged.plane(k)[0][2] > 0.999]
+    assert len(top) == 1 and len(merged.holes[top[0]]) == 1
+    assert abs(merged.volume() - 3.0) < 1e-12
+
+
+def test_merge_coplanar_leaves_faces_at_an_angle_alone():
+    b = unit_box()
+    assert ph.merge_coplanar(b, 1e-12) is b

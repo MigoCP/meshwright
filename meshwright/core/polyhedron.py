@@ -397,6 +397,120 @@ def merge_corners(poly, distance, place=None):
     return _compact(vertices, faces, labels, holes)
 
 
+def merge_coplanar(poly, eps):
+    """Join neighbouring faces that lie on one plane into a single face.
+
+    Two faces sharing an edge are joined when their normals agree to within
+    eps (as 1 - cos of the angle) and their plane offsets to within eps x the
+    solid's size. The joined face's loops are its members' edges that are not
+    shared inside the group: one outer loop, plus holes. Corners left inside a
+    joined face are dropped. Faces that join nothing are kept as they are.
+    """
+    count = len(poly.faces)
+    planes = [poly.plane(k) for k in range(count)]
+    size = 0.0
+    if poly.vertices:
+        lo = [min(p[c] for p in poly.vertices) for c in range(3)]
+        hi = [max(p[c] for p in poly.vertices) for c in range(3)]
+        size = vec.length(vec.sub(hi, lo))
+    owner = {}
+    for k in range(count):
+        for loop in poly.loops(k):
+            for j in range(len(loop)):
+                owner[(loop[j], loop[(j + 1) % len(loop)])] = k
+    uf = UnionFind(count)
+    for (a, b), k in owner.items():
+        other = owner.get((b, a))
+        if other is None or other <= k or planes[k] is None or planes[other] is None:
+            continue
+        (n1, d1, _), (n2, d2, _) = planes[k], planes[other]
+        if vec.dot(n1, n2) >= 1.0 - eps and abs(d1 - d2) <= eps * size:
+            uf.union(k, other)
+    groups = uf.groups()
+    if len(groups) == count:
+        return poly
+    faces, holes, labels = [], [], []
+    for g in groups:
+        if len(g) == 1:
+            faces.append(poly.faces[g[0]])
+            holes.append(poly.holes[g[0]])
+            labels.append(poly.labels[g[0]])
+            continue
+        edges = set()
+        for k in g:
+            for loop in poly.loops(k):
+                for j in range(len(loop)):
+                    edges.add((loop[j], loop[(j + 1) % len(loop)]))
+        rim = [e for e in edges if (e[1], e[0]) not in edges]
+        n = planes[g[0]][0]
+        loops = _chain(poly.vertices, rim, n)
+        if loops is None:  # could not be chained cleanly: keep the faces apart
+            for k in g:
+                faces.append(poly.faces[k])
+                holes.append(poly.holes[k])
+                labels.append(poly.labels[k])
+            continue
+        u, v = vec.perpendicular_pair(n)
+        outer, inner = [], []
+        for loop in loops:
+            flat = [(vec.dot(poly.vertices[i], u), vec.dot(poly.vertices[i], v)) for i in loop]
+            (outer if poly2d.signed_area(flat) > 0.0 else inner).append(loop)
+        if len(outer) != 1:
+            for k in g:
+                faces.append(poly.faces[k])
+                holes.append(poly.holes[k])
+                labels.append(poly.labels[k])
+            continue
+        faces.append(outer[0])
+        holes.append(inner)
+        labels.append(poly.labels[g[0]])
+    return _compact(poly.vertices, faces, labels, holes)
+
+
+def _chain(vertices, edges, normal):
+    """Directed edges chained into closed loops; where a corner has two ways
+    on, the one turning least to the left keeps to the same side. None when
+    the edges do not close."""
+    nexts = {}
+    for a, b in edges:
+        nexts.setdefault(a, []).append(b)
+    u, v = vec.perpendicular_pair(normal)
+
+    def flat(i):
+        return (vec.dot(vertices[i], u), vec.dot(vertices[i], v))
+
+    loops = []
+    while nexts:
+        start = min(nexts)
+        loop = [start]
+        prev, current = None, start
+        while True:
+            options = nexts.get(current)
+            if not options:
+                return None
+            k = 0
+            if len(options) > 1 and prev is not None:
+                c, p = flat(current), flat(prev)
+                back = math.atan2(p[1] - c[1], p[0] - c[0])
+                turns = []
+                for o in options:
+                    q = flat(o)
+                    a = (back - math.atan2(q[1] - c[1], q[0] - c[0])) % (2.0 * math.pi)
+                    turns.append(a if a > 0.0 else 2.0 * math.pi)
+                k = turns.index(min(turns))
+            nxt = options.pop(k)
+            if not options:
+                del nexts[current]
+            if nxt == start:
+                break
+            loop.append(nxt)
+            prev, current = current, nxt
+            if len(loop) > len(edges):
+                return None
+        loops.append(loop)
+    return loops
+
+
 def closed_problems(poly):
     """Why poly is not a closed, consistently wound solid (empty list when it is)."""
     problems = []
@@ -495,10 +609,11 @@ def validate(poly, flat_tol, extent=None, clearance=0.0, axis=None, keep=KEEP_CL
     worst_flat = 0.0
     tight = 0
     least = None
+    empty = 0
     for k in range(len(poly.faces)):
         fitted = poly.plane(k)
         if fitted is None:
-            problems.append("a face has no area")
+            empty += 1
             planes.append(None)
             continue
         n, d, flat = fitted
@@ -515,6 +630,8 @@ def validate(poly, flat_tol, extent=None, clearance=0.0, axis=None, keep=KEEP_CL
             short = gap - need
             if least is None or short < least:
                 least = short
+    if empty:
+        problems.append("%d %s no area" % (empty, "face has" if empty == 1 else "faces have"))
     if worst_flat > flat_tol:
         problems.append("a face is %.3g off flat (allowed %.3g)" % (worst_flat, flat_tol))
     if tight:
