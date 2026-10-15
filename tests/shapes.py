@@ -191,6 +191,53 @@ def l_block(size=2.0, notch=1.0, height=1.0):
     return prism([(0, 0), (s, 0), (s, s - k), (s - k, s - k), (s - k, s), (0, s)], height)
 
 
+def prism_with_holes(outline, holes, height=1.0):
+    """Closed prism over a 2D outline with holes running right through it."""
+    from meshwright.core import poly2d
+
+    def ccw(loop, want_ccw):
+        a = poly2d.signed_area(loop)
+        return list(loop) if (a > 0) == want_ccw else list(reversed(loop))
+
+    loops = [ccw(outline, True)] + [ccw(h, False) for h in holes]
+    flat = [p for loop in loops for p in loop]
+    n = len(flat)
+    verts = [(x, y, 0.0) for x, y in flat] + [(x, y, height) for x, y in flat]
+    faces = []
+    for a, b, c in poly2d.triangulate(loops[0], loops[1:]):
+        faces.append((a, c, b))              # bottom, facing down
+        faces.append((a + n, b + n, c + n))  # top, facing up
+    start = 0
+    for loop in loops:  # walls: the outline's face out, the holes' face into the hole
+        m = len(loop)
+        for k in range(m):
+            i, j = start + k, start + (k + 1) % m
+            faces.append((i, j, j + n))
+            faces.append((i, j + n, i + n))
+        start += m
+    return TriMesh(verts, faces)
+
+
+def frame(size=2.0, hole=1.0, height=0.5):
+    """Square plate with a square hole through the middle."""
+    a, b = 0.5 * size, 0.5 * hole
+    return prism_with_holes([(-a, -a), (a, -a), (a, a), (-a, a)], [[(-b, -b), (b, -b), (b, b), (-b, b)]], height)
+
+
+def plate_with_round_hole(size=4.0, radius=1.0, sides=24, height=0.5):
+    a = 0.5 * size
+    hole = [(radius * math.cos(2 * math.pi * k / sides), radius * math.sin(2 * math.pi * k / sides))
+            for k in range(sides)]
+    return prism_with_holes([(-a, -a), (a, -a), (a, a), (-a, a)], [hole], height)
+
+
+def u_block(width=3.0, depth=2.0, slot=1.0, height=1.0):
+    """U-shaped prism: the end faces of its two arms are separate faces on one plane."""
+    w, d, k = width, depth, slot
+    a = 0.5 * (w - k)
+    return prism([(0, 0), (w, 0), (w, d), (w - a, d), (w - a, d - k), (a, d - k), (a, d), (0, d)], height)
+
+
 def subdivided(mesh, times=1):
     """Split every triangle into four (edge midpoints), keeping the shape exactly.
 

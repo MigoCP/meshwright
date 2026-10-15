@@ -1,6 +1,7 @@
 import Rhino.Geometry as rg
 
 from meshwright.core import polyhedron as ph
+from meshwright.core import rebuild
 from meshwright.rhino import build
 
 import shapes
@@ -42,3 +43,24 @@ def test_open_faces_fail(monkeypatch):
     brep, report = build.polyhedron_to_brep(opened, 0.001)
     assert brep is None and report.failed
     assert "could not make a closed solid from the 5 faces" in str(report)
+
+
+def rebuilt(mesh):
+    v, f = mesh.as_lists()
+    return rebuild.rebuild(v, f, 0.001).solid
+
+
+def test_faces_with_holes_and_non_convex_faces(monkeypatch):
+    for mesh in (shapes.frame(), shapes.plate_with_round_hole(), shapes.u_block()):
+        poly = rebuilt(mesh)
+        brep, report = build.polyhedron_to_brep(poly, 0.001)
+        assert report.status == 0 and brep.IsSolid
+        assert brep.Faces.Count == len(poly.faces)
+    # Through the welded mesh, the holed and L-shaped faces are triangulated and merged back.
+    monkeypatch.setattr(rg.Brep, "fail_planar", True)
+    for mesh in (shapes.frame(), shapes.u_block()):
+        poly = rebuilt(mesh)
+        brep, report = build.polyhedron_to_brep(poly, 0.001)
+        assert report.status == 1 and brep.IsSolid
+        assert brep.Faces.Count == len(poly.faces)
+
