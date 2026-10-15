@@ -266,10 +266,19 @@ class _TopologyVertices(object):
         return list(self._members[topology_index])
 
 
+class _Normals(list):
+    def ComputeNormals(self):
+        return True
+
+
 class Mesh(object):
     def __init__(self):
         self.Vertices = _Vertices()
         self.Faces = _Faces()
+        self.Normals = _Normals()
+
+    def Compact(self):
+        return True
 
     @property
     def TopologyVertices(self):
