@@ -81,3 +81,20 @@ def test_offset_solid_component_defaults_and_failures():
     assert out["Status"] == 2 and "solid: the part is not convex" in out["Info"]
     out = run_component("OffsetSolid", M=None)
     assert out["Status"] == 3 and out["Solid"] is None
+
+
+def test_mesh_to_solid_component():
+    g = shapes.rng(9)
+    placed, _ = shapes.randomly_placed(shapes.subdivided(shapes.frame(), 2), g)
+    out = run_component("MeshToSolid", M=rg.Mesh.from_trimesh(placed), Tol=0.001)
+    assert out["Status"] == 0 and out["OK"] is True
+    assert out["Solid"].IsSolid and out["Solid"].Faces.Count == 10
+    assert "rebuild: 10 flat faces (2 with holes)" in out["Info"]
+
+
+def test_mesh_to_solid_component_failures():
+    v, f = shapes.box().as_lists()
+    out = run_component("MeshToSolid", M=rg.Mesh.from_trimesh(shapes.TriMesh(v, f[:-2])))
+    assert out["Status"] == 3 and out["Solid"] is None
+    assert run_component("MeshToSolid", M=None)["Status"] == 3
+
