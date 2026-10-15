@@ -62,3 +62,22 @@ def test_natural_axis_component_reports_mesh_problems_too():
     out = run_component("NaturalAxis", M=mesh)
     assert out["Status"] == 1 and "mesh: dropped 1 loose bit" in out["Info"]
     assert run_component("NaturalAxis", M=None)["Status"] == 3
+
+
+def test_offset_solid_component():
+    mesh = rg.Mesh.from_trimesh(shapes.faceted_part())
+    axis = rg.Plane(rg.Point3d(0, 0, 0), rg.Vector3d(0.0, 0.0, 1.0))
+    out = run_component("OffsetSolid", M=mesh, Clr=0.05, A=axis, Tol=0.001)
+    assert out["Status"] == 0 and out["OK"] is True
+    assert out["Solid"].IsSolid
+    assert "solid: split corners merged" in out["Info"]
+
+
+def test_offset_solid_component_defaults_and_failures():
+    # Clr, A and Tol missing: zero clearance, document tolerance (0.001 outside Rhino).
+    out = run_component("OffsetSolid", M=rg.Mesh.from_trimesh(shapes.box()))
+    assert out["Status"] == 0 and out["Solid"].Faces.Count == 6
+    out = run_component("OffsetSolid", M=rg.Mesh.from_trimesh(shapes.l_block()), Clr=0.1)
+    assert out["Status"] == 2 and "solid: the part is not convex" in out["Info"]
+    out = run_component("OffsetSolid", M=None)
+    assert out["Status"] == 3 and out["Solid"] is None
