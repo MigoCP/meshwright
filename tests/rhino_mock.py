@@ -4,7 +4,7 @@ Rhino is not available in CI, so tests install this module as `Rhino`,
 `Rhino.Geometry` and `Rhino.Geometry.Intersect`. It mimics names and behaviour
 closely enough for the thin adapters in meshwright.rhino, and nothing more.
 
-Covered: Point3d, Point3f, Vector3d, Plane, Transform, Polyline, PolylineCurve,
+Covered: Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Line, PolylineCurve,
 Mesh (Vertices, Faces, TopologyVertices), Intersect.Intersection.MeshPlane and
 a polygon-soup Brep: just enough of Brep (planar faces, join, from mesh, merge
 coplanar faces, solid tests) to exercise meshwright.rhino.build. Set
@@ -195,6 +195,9 @@ class Transform(object):
 class Polyline(list):
     """List of Point3d. Closed when the last point equals the first."""
 
+    def Add(self, p):
+        self.append(p)
+
     @property
     def Count(self):
         return len(self)
@@ -322,6 +325,15 @@ class Mesh(object):
         for f in trimesh.faces:
             m.Faces.AddFace(*[int(i) for i in f])
         return m
+
+
+class Line(object):
+    def __init__(self, a, b):
+        self.From, self.To = a, b
+
+    @property
+    def Length(self):
+        return self.From.DistanceTo(self.To)
 
 
 class PolylineCurve(object):
@@ -538,7 +550,7 @@ def install():
     rhino.IS_MOCK = True
     geometry = types.ModuleType("Rhino.Geometry")
     intersect = types.ModuleType("Rhino.Geometry.Intersect")
-    for cls in (Point3d, Point3f, Vector3d, Plane, Transform, Polyline, PolylineCurve, Mesh,
+    for cls in (Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Line, PolylineCurve, Mesh,
                 Brep, BrepSolidOrientation):
         setattr(geometry, cls.__name__, cls)
     intersect.Intersection = _Intersection

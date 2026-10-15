@@ -60,3 +60,11 @@ def test_from_vector_reads_vectors_planes_and_sequences():
     assert convert.from_vector([0, 0, 2]) == (0.0, 0.0, 2.0)
     assert convert.from_vector(None) is None and convert.from_vector("x") is None
 
+
+def test_polylines_and_points():
+    line = convert.to_polyline([(0, 0, 0), (1, 0, 0), (1, 1, 0)], closed=True)
+    assert line.Count == 4 and line.IsClosed
+    assert convert.to_polyline([(0, 0, 0), (1, 0, 0)]).Count == 2
+    p = convert.to_point((1.0, 2.0, 3.0))
+    assert (p.X, p.Y, p.Z) == (1.0, 2.0, 3.0)
+

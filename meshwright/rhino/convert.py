@@ -57,6 +57,18 @@ def lists_to_mesh(vertices, faces):
     return mesh
 
 
+def to_point(p):
+    return rg.Point3d(p[0], p[1], p[2])
+
+
+def to_polyline(points, closed=False):
+    """A Rhino polyline through (x, y, z) points, closed back to the first when asked."""
+    line = rg.Polyline([to_point(p) for p in points])
+    if closed and points:
+        line.Add(to_point(points[0]))
+    return line
+
+
 def to_vector(v):
     return rg.Vector3d(v[0], v[1], v[2])
 
