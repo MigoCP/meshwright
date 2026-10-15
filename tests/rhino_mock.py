@@ -3,10 +3,12 @@
 Rhino is not available in CI, so tests install this module as `Rhino`,
 `Rhino.Geometry` and `Rhino.Geometry.Intersect`. It mimics names and behaviour
 closely enough for the thin adapters in meshwright.rhino, and nothing more.
-It does not build Breps: Brep steps are tested with stand-in objects.
 
-Covered: Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Mesh (Vertices,
-Faces, TopologyVertices) and Intersect.Intersection.MeshPlane.
+Covered: Point3d, Point3f, Vector3d, Plane, Transform, Polyline, PolylineCurve,
+Mesh (Vertices, Faces, TopologyVertices), Intersect.Intersection.MeshPlane and
+a polygon-soup Brep: just enough of Brep (planar faces, join, from mesh, merge
+coplanar faces, solid tests) to exercise meshwright.rhino.build. Set
+Brep.fail_planar = True to make CreatePlanarBreps fail, as it can in Rhino.
 """
 
 from __future__ import division
@@ -309,6 +311,125 @@ class Mesh(object):
         return m
 
 
+class PolylineCurve(object):
+    def __init__(self, points):
+        self.points = [Point3d(p.X, p.Y, p.Z) for p in points]
+
+    @property
+    def IsClosed(self):
+        return len(self.points) > 3 and self.points[0] == self.points[-1]
+
+
+class BrepSolidOrientation(object):
+    None_ = 0
+    Outward = 1
+    Inward = -1
+    Unknown = 2
+
+
+class _BrepFaces(list):
+    @property
+    def Count(self):
+        return len(self)
+
+
+class Brep(object):
+    """Polygon faces (lists of numpy points), each face a list of polygons
+    (one for a planar face, several triangles while coplanar faces are not merged)."""
+
+    fail_planar = False
+
+    def __init__(self, faces):
+        self.Faces = _BrepFaces(faces)
+        self.tolerance = 1e-6
+
+    def _polygons(self):
+        return [poly for face in self.Faces for poly in face]
+
+    @staticmethod
+    def CreatePlanarBreps(curve, tolerance):
+        if Brep.fail_planar or not curve.IsClosed:
+            return None
+        poly = [p._a() for p in curve.points[:-1]]
+        normal = np.zeros(3)
+        for i in range(len(poly)):
+            normal += np.cross(poly[i], poly[(i + 1) % len(poly)])
+        if np.linalg.norm(normal) <= tolerance * tolerance:
+            return None
+        return [Brep([[poly]])]
+
+    @staticmethod
+    def JoinBreps(breps, tolerance):
+        joined = Brep([face for b in breps for face in b.Faces])
+        joined.tolerance = tolerance
+        return [joined]
+
+    @staticmethod
+    def CreateFromMesh(mesh, trimmed_triangles):
+        faces = []
+        for f in mesh.Faces:
+            ids = [f.A, f.B, f.C] + ([f.D] if f.IsQuad else [])
+            faces.append([[np.array([mesh.Vertices[i].X, mesh.Vertices[i].Y, mesh.Vertices[i].Z])
+                           for i in ids]])
+        return Brep(faces)
+
+    def _edge_counts(self):
+        def key(p):
+            return tuple(np.round(p / max(self.tolerance, 1e-12)).astype(int))
+        counts = {}
+        for poly in self._polygons():
+            for i in range(len(poly)):
+                e = (key(poly[i]), key(poly[(i + 1) % len(poly)]))
+                counts[e] = counts.get(e, 0) + 1
+        return counts
+
+    @property
+    def IsSolid(self):
+        counts = self._edge_counts()
+        return bool(counts) and all(c == 1 and counts.get((b, a), 0) == 1 for (a, b), c in counts.items())
+
+    @property
+    def IsValid(self):
+        return len(self.Faces) > 0
+
+    def _volume(self):
+        total = 0.0
+        for poly in self._polygons():
+            for i in range(1, len(poly) - 1):
+                total += float(np.dot(poly[0], np.cross(poly[i], poly[i + 1])))
+        return total / 6.0
+
+    @property
+    def SolidOrientation(self):
+        if not self.IsSolid:
+            return BrepSolidOrientation.None_
+        return BrepSolidOrientation.Outward if self._volume() > 0 else BrepSolidOrientation.Inward
+
+    def Flip(self):
+        for face in self.Faces:
+            for poly in face:
+                poly.reverse()
+
+    def MergeCoplanarFaces(self, tolerance):
+        """Group faces by plane (normal and offset rounded to the tolerance)."""
+        groups = {}
+        order = []
+        for face in self.Faces:
+            poly = face[0]
+            n = np.zeros(3)
+            for i in range(len(poly)):
+                n += np.cross(poly[i], poly[(i + 1) % len(poly)])
+            n = n / np.linalg.norm(n)
+            key = (tuple(np.round(n / 1e-6).astype(int)), int(round(np.dot(n, poly[0]) / tolerance)))
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].extend(face)
+        merged = len(order) < len(self.Faces)
+        self.Faces = _BrepFaces(groups[k] for k in order)
+        return merged
+
+
 class _Intersection(object):
     @staticmethod
     def MeshPlane(mesh, plane):
@@ -381,7 +502,8 @@ def install():
     rhino.IS_MOCK = True
     geometry = types.ModuleType("Rhino.Geometry")
     intersect = types.ModuleType("Rhino.Geometry.Intersect")
-    for cls in (Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Mesh):
+    for cls in (Point3d, Point3f, Vector3d, Plane, Transform, Polyline, PolylineCurve, Mesh,
+                Brep, BrepSolidOrientation):
         setattr(geometry, cls.__name__, cls)
     intersect.Intersection = _Intersection
     geometry.Intersect = intersect
