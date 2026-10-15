@@ -3,7 +3,7 @@
 1. The library parses as code IronPython 2.7 can run: no syntax that only
    Python 3 has (f-strings, nonlocal, annotations, keyword-only arguments,
    math.inf, max/min default=, starred assignment, walrus, matrix multiply),
-   and true division switched on wherever "/" could see two ints.
+   and true division switched on in every module that divides.
 2. core/ stays pure: no Rhino, .NET, Grasshopper, numpy or scipy imports.
 3. Word list: words from a list kept outside the repository must not
    appear in it. The list comes from the SOLIDWRIGHT_WORDS environment
@@ -50,8 +50,12 @@ def repo_files(exts=None):
                 yield path
 
 
+COMPONENTS = os.path.join(ROOT, "components")
+
+
 def package_modules():
-    return sorted(p for p in repo_files({".py"}) if p.startswith(PACKAGE))
+    """Library modules and Grasshopper component scripts: everything that runs inside Rhino."""
+    return sorted(p for p in repo_files({".py"}) if p.startswith(PACKAGE) or p.startswith(COMPONENTS))
 
 
 def read(path):
@@ -141,7 +145,9 @@ def test_module_is_ironpython_compatible(path):
     finder = _Py3OnlyFinder()
     finder.visit(tree)
     assert not finder.problems, "%s uses Python 3 only syntax: %s" % (rel(path), finder.problems)
-    if "/" in source and tree.body:
+    divides = any(isinstance(n, (ast.BinOp, ast.AugAssign)) and isinstance(n.op, ast.Div)
+                  for n in ast.walk(tree))
+    if divides:
         futures = set()
         for node in tree.body:
             if isinstance(node, ast.ImportFrom) and node.module == "__future__":
