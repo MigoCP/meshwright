@@ -399,3 +399,140 @@ def classify(polygon, circle_tol=CIRCLE_TOL, ellipse_tol=ELLIPSE_TOL, polygon_to
 def _percentile(values, q):
     ordered = sorted(values)
     return ordered[min(len(ordered) - 1, int(q * len(ordered)))]
+
+
+# ---------------------------------------------------------------- triangulation
+
+def triangulate(outer, holes=()):
+    """Triangles covering a simple polygon with holes, as index triples.
+
+    outer is the boundary and holes are polygons inside it that touch
+    neither it nor each other; any winding is accepted. Indices run over
+    outer's points first, then each hole's in the order given. Triangles
+    come out counter-clockwise.
+
+    Each hole is joined to the boundary by a bridge from its rightmost point
+    to a corner it can see, which turns the polygon with holes into one
+    (self-touching) loop, and then ears are cut off that loop. Corners on
+    straight runs are kept and used.
+    """
+    points = [(float(p[0]), float(p[1])) for p in outer]
+    loop = list(range(len(points)))
+    if signed_area(points) < 0.0:
+        loop.reverse()
+    hole_loops = []
+    for hole in holes:
+        start = len(points)
+        points.extend((float(p[0]), float(p[1])) for p in hole)
+        r = list(range(start, len(points)))
+        if signed_area(points[start:]) > 0.0:
+            r.reverse()  # holes run clockwise
+        hole_loops.append(r)
+    hole_loops.sort(key=lambda r: -max(points[i][0] for i in r))
+    for r in hole_loops:
+        loop = _bridge(points, loop, r)
+    return _cut_ears(points, loop)
+
+
+def _bridge(points, loop, hole):
+    """loop with hole spliced in through a bridge from the hole's rightmost point."""
+    k = max(range(len(hole)), key=lambda j: (points[hole[j]][0], points[hole[j]][1]))
+    m = points[hole[k]]
+    n = len(loop)
+    best = None  # (x where the ray from m to +x first meets the loop, edge position)
+    for e in range(n):
+        a, b = points[loop[e]], points[loop[(e + 1) % n]]
+        if (a[1] - m[1]) * (b[1] - m[1]) > 0.0 or a[1] == b[1]:
+            continue
+        x = a[0] + (m[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
+        if x >= m[0] and (best is None or x < best[0]):
+            best = (x, e)
+    if best is None:
+        raise ValueError("a hole is not inside the outer boundary")
+    x, e = best
+    hit = (x, m[1])
+    a, b = points[loop[e]], points[loop[(e + 1) % n]]
+    if a == hit or b == hit:
+        p = e if a == hit else (e + 1) % n  # the ray runs exactly through a corner
+    else:
+        p = e if a[0] > b[0] else (e + 1) % n
+    # A reflex corner inside the triangle m, hit, p would block the bridge: take
+    # the one closest in angle to the ray instead.
+    pp = points[loop[p]]
+    best_key = None
+    for j in range(n):
+        q = points[loop[j]]
+        if j == p or q == pp:
+            continue
+        if cross(points[loop[j - 1]], q, points[loop[(j + 1) % n]]) >= 0.0:
+            continue
+        if _in_triangle(q, m, hit, pp):
+            key = (math.atan2(abs(q[1] - m[1]), q[0] - m[0]), _dist(m, q))
+            if best_key is None or key < best_key:
+                best_key, p = key, j
+    p = _facing_copy(points, loop, p, m)
+    turned = hole[k:] + hole[:k]
+    return loop[:p + 1] + turned + [hole[k], loop[p]] + loop[p + 1:]
+
+
+def _facing_copy(points, loop, p, target):
+    """Among the loop positions holding the same corner as position p (an
+    earlier bridge visits a corner twice), the one whose inside wedge faces
+    the target point."""
+    corner = points[loop[p]]
+    copies = [j for j in range(len(loop)) if points[loop[j]] == corner]
+    if len(copies) < 2:
+        return p
+    n = len(loop)
+    full = 2.0 * math.pi
+    aim = math.atan2(target[1] - corner[1], target[0] - corner[0])
+    for j in copies:
+        prev, nxt = points[loop[j - 1]], points[loop[(j + 1) % n]]
+        start = math.atan2(nxt[1] - corner[1], nxt[0] - corner[0])
+        stop = math.atan2(prev[1] - corner[1], prev[0] - corner[0])
+        # Inside a counter-clockwise loop: turning counter-clockwise from the outgoing edge to the incoming one.
+        if (aim - start) % full < (stop - start) % full:
+            return j
+    return p
+
+
+def _in_triangle(q, a, b, c):
+    """q inside or on the triangle a, b, c (either winding)."""
+    d1, d2, d3 = cross(a, b, q), cross(b, c, q), cross(c, a, q)
+    has_neg = d1 < 0.0 or d2 < 0.0 or d3 < 0.0
+    has_pos = d1 > 0.0 or d2 > 0.0 or d3 > 0.0
+    return not (has_neg and has_pos)
+
+
+def _cut_ears(points, loop):
+    """Ear clipping of one counter-clockwise loop (it may touch itself at bridges)."""
+    loop = list(loop)
+    tris = []
+    while len(loop) > 3:
+        n = len(loop)
+        cut = None
+        for k in range(n):
+            i0, i1, i2 = loop[k - 1], loop[k], loop[(k + 1) % n]
+            a, b, c = points[i0], points[i1], points[i2]
+            if cross(a, b, c) <= 0.0:
+                continue
+            blocked = False
+            for j in loop:
+                q = points[j]
+                if q == a or q == b or q == c:
+                    continue
+                if _in_triangle(q, a, b, c):
+                    blocked = True
+                    break
+            if not blocked:
+                cut = k
+                break
+        if cut is None:
+            # Only reached on degenerate input: cut the most convex corner to finish.
+            cut = max(range(n), key=lambda k: cross(points[loop[k - 1]], points[loop[k]],
+                                                    points[loop[(k + 1) % n]]))
+        tris.append((loop[cut - 1], loop[cut], loop[(cut + 1) % len(loop)]))
+        loop.pop(cut)
+    if len(loop) == 3:
+        tris.append((loop[0], loop[1], loop[2]))
+    return tris

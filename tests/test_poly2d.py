@@ -167,3 +167,55 @@ def test_prune_corners_drops_points_on_straight_edges():
     square = [(0, 0), (1, 0.001), (2, 0), (2, 2), (0, 2)]
     assert poly2d.prune_corners(square, 0.01) == [(0, 0), (2, 0), (2, 2), (0, 2)]
     assert poly2d.prune_corners(square, 0.0001) == square
+
+
+# ---------------------------------------------------------------- triangulate
+
+def assert_covers(outer, holes, tris):
+    pts = list(outer) + [p for h in holes for p in h]
+    areas = [poly2d.cross(pts[a], pts[b], pts[c]) / 2.0 for a, b, c in tris]
+    want = poly2d.area(outer) - sum(poly2d.area(h) for h in holes)
+    assert min(areas) > 0.0                                # all counter-clockwise, none flat
+    assert abs(sum(areas) - want) < 1e-9 * want            # exactly covered, no overlap
+    assert len(tris) == len(pts) + 2 * len(holes) - 2      # every corner used
+
+
+SQUARE = [(0, 0), (4, 0), (4, 4), (0, 4)]
+
+
+@pytest.mark.parametrize("outer,holes", [
+    (SQUARE, []),
+    (list(reversed(SQUARE)), []),                                        # clockwise input
+    ([(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2)], []),              # L
+    ([(0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (2, 1), (2, 2), (1, 2), (1, 1), (0, 1)], []),  # straight runs
+    ([(0, 0), (9, 0), (9, 3), (8, 3), (8, 1), (7, 1), (7, 3), (6, 3), (6, 1), (5, 1), (5, 3),
+      (4, 3), (4, 1), (3, 1), (3, 3), (2, 3), (2, 1), (1, 1), (1, 3), (0, 3)], []),  # comb
+    (SQUARE, [[(1, 1), (3, 1), (3, 3), (1, 3)]]),
+    (SQUARE, [[(1, 1), (1, 3), (3, 3), (3, 1)]]),                        # hole given clockwise
+    (SQUARE, [[(1, 1), (3, 1), (3, 2), (3, 3), (2, 3), (1, 3)]]),        # hole with a straight run
+    ([(0, 0), (10, 0), (10, 10), (0, 10)],                               # holes in line with each other
+     [[(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)] for x in (2, 4.5, 7) for y in (2, 4.5, 7)]),
+])
+def test_triangulate(outer, holes):
+    assert_covers(outer, holes, poly2d.triangulate(outer, holes))
+
+
+def test_triangulate_random_stars_with_holes():
+    g = shapes.rng(31)
+    for _ in range(200):
+        k = int(g.integers(5, 40))
+        star = [(r * math.cos(2 * math.pi * i / k), r * math.sin(2 * math.pi * i / k))
+                for i, r in enumerate(g.uniform(3.0, 5.0, k))]
+        holes = []
+        for h in range(int(g.integers(0, 4))):
+            cx, cy = 2 * math.cos(2 * math.pi * h / 3 + 0.3), 2 * math.sin(2 * math.pi * h / 3 + 0.3)
+            m = int(g.integers(3, 10))
+            rr = float(g.uniform(0.4, 0.7))
+            holes.append([(cx + rr * math.cos(2 * math.pi * j / m), cy + rr * math.sin(2 * math.pi * j / m))
+                          for j in range(m)])
+        assert_covers(star, holes, poly2d.triangulate(star, holes))
+
+
+def test_triangulate_refuses_a_hole_outside():
+    with pytest.raises(ValueError):
+        poly2d.triangulate(SQUARE, [[(10, 1), (11, 1), (11, 2)]])
