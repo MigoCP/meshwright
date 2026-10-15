@@ -38,3 +38,13 @@ def test_quads_split_on_the_shorter_diagonal():
 
 def test_document_tolerance_outside_rhino():
     assert convert.document_tolerance(0.01) == 0.01
+
+
+def test_from_vector_reads_vectors_planes_and_sequences():
+    # A Vector3d also has (static) XAxis/YAxis/ZAxis under pythonnet: it must not be read as a plane.
+    assert convert.from_vector(rg.Vector3d(1.0, 2.0, 3.0)) == (1.0, 2.0, 3.0)
+    plane = rg.Plane(rg.Point3d(5, 5, 5), rg.Vector3d(1.0, 0.0, 0.0))
+    assert convert.from_vector(plane) == (1.0, 0.0, 0.0)
+    assert convert.from_vector([0, 0, 2]) == (0.0, 0.0, 2.0)
+    assert convert.from_vector(None) is None and convert.from_vector("x") is None
+

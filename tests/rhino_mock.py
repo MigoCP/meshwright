@@ -94,6 +94,15 @@ class Vector3d(object):
         return "Vector3d(%g, %g, %g)" % (self.X, self.Y, self.Z)
 
 
+# RhinoCommon's static members. Under pythonnet they also show on instances
+# (a Vector3d "has" a ZAxis), so the mock has them too.
+Vector3d.Zero = Vector3d(0.0, 0.0, 0.0)
+Vector3d.XAxis = Vector3d(1.0, 0.0, 0.0)
+Vector3d.YAxis = Vector3d(0.0, 1.0, 0.0)
+Vector3d.ZAxis = Vector3d(0.0, 0.0, 1.0)
+Point3d.Origin = Point3d(0.0, 0.0, 0.0)
+
+
 def _unit(a):
     n = np.linalg.norm(a)
     return a / n if n > 0 else a

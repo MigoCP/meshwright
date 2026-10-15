@@ -61,7 +61,9 @@ def from_vector(v):
     """(x, y, z) from a Vector3d, a Plane (its Z axis) or a 3-sequence; None if none of those."""
     if v is None:
         return None
-    if hasattr(v, "ZAxis"):
+    # Not hasattr(v, "ZAxis"): under pythonnet a Vector3d also answers that,
+    # with the static Vector3d.ZAxis (world Z).
+    if isinstance(v, rg.Plane):
         v = v.ZAxis
     if hasattr(v, "X"):
         return (float(v.X), float(v.Y), float(v.Z))
