@@ -219,6 +219,14 @@ class _MeshFace(object):
 
 
 class _Vertices(list):
+    """Like Rhino 8: positions kept in double precision (Point3dAt) unless
+    UseDoublePrecisionVertices is switched off; items read as Point3f."""
+
+    def __init__(self):
+        list.__init__(self)
+        self.UseDoublePrecisionVertices = True
+        self._exact = []
+
     @property
     def Count(self):
         return len(self)
@@ -227,7 +235,12 @@ class _Vertices(list):
         if y is None:
             x, y, z = x.X, x.Y, x.Z
         self.append(Point3f(x, y, z))
+        self._exact.append(Point3d(x, y, z) if self.UseDoublePrecisionVertices else Point3f(x, y, z))
         return len(self) - 1
+
+    def Point3dAt(self, i):
+        p = self._exact[i]
+        return Point3d(p.X, p.Y, p.Z)
 
 
 class _Faces(list):

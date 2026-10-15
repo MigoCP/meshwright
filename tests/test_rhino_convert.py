@@ -10,7 +10,19 @@ def test_round_trip_keeps_geometry():
     m = shapes.faceted_part()
     v, f = convert.mesh_to_lists(convert.lists_to_mesh(*m.as_lists()))
     assert len(v) == len(m.vertices) and len(f) == len(m.faces)
-    assert abs(topology.signed_volume(v, f) - m.volume()) < 1e-5  # Point3f storage
+    assert abs(topology.signed_volume(v, f) - m.volume()) < 1e-14  # double precision kept
+
+
+def test_single_precision_meshes_still_read():
+    mesh = rg.Mesh()
+    mesh.Vertices.UseDoublePrecisionVertices = False
+    for p in [(1.0 / 3.0, 0, 0), (1, 0, 0), (0, 1, 0)]:
+        mesh.Vertices.Add(*p)
+    mesh.Faces.AddFace(0, 1, 2)
+    v, _ = convert.mesh_to_lists(mesh)
+    assert v[0][0] != 1.0 / 3.0 and abs(v[0][0] - 1.0 / 3.0) < 1e-7
+    exact = convert.lists_to_mesh([(1.0 / 3.0, 0, 0), (1, 0, 0), (0, 1, 0)], [(0, 1, 2)])
+    assert convert.mesh_to_lists(exact)[0][0][0] == 1.0 / 3.0
 
 
 def test_split_vertices_arrive_welded():

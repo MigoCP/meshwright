@@ -13,14 +13,17 @@ def mesh_to_lists(mesh):
     """(vertices, triangles) from a Rhino mesh.
 
     Vertices come from the mesh's topology vertices, so coincident vertices
-    (split for texture or normal seams) arrive welded. Quads are split along
-    their shorter diagonal, which keeps the two triangles as close to the
-    quad's real shape as possible.
+    (split for texture or normal seams) arrive welded. Topology vertices are
+    single precision, so their positions are read from the mesh's own
+    double-precision vertices when it has them (Rhino 8 meshes usually do).
+    Quads are split along their shorter diagonal, which keeps the two
+    triangles as close to the quad's real shape as possible.
     """
     top = mesh.TopologyVertices
+    exact = getattr(mesh.Vertices, "UseDoublePrecisionVertices", False)
     vertices = []
     for i in range(top.Count):
-        p = top[i]
+        p = mesh.Vertices.Point3dAt(top.MeshVertexIndices(i)[0]) if exact else top[i]
         vertices.append((float(p.X), float(p.Y), float(p.Z)))
     faces = []
     for fi in range(mesh.Faces.Count):
@@ -42,8 +45,9 @@ def mesh_to_lists(mesh):
 
 
 def lists_to_mesh(vertices, faces):
-    """A Rhino mesh from vertex tuples and triangle index triples."""
+    """A Rhino mesh (double-precision vertices) from vertex tuples and triangle index triples."""
     mesh = rg.Mesh()
+    mesh.Vertices.UseDoublePrecisionVertices = True
     for x, y, z in vertices:
         mesh.Vertices.Add(x, y, z)
     for a, b, c in faces:
