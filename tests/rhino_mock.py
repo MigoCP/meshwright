@@ -9,6 +9,8 @@ Mesh (Vertices, Faces, TopologyVertices), Intersect.Intersection.MeshPlane and
 a polygon-soup Brep: just enough of Brep (planar faces, join, from mesh, merge
 coplanar faces, solid tests) to exercise meshwright.rhino.build. Set
 Brep.fail_planar = True to make CreatePlanarBreps fail, as it can in Rhino.
+Booleans, BoundingBox, VolumeMassProperties and Intersection.BrepBrep work
+for Breps made of axis-aligned boxes (Brep.CreateFromBox), on a grid of cells.
 """
 
 from __future__ import division
@@ -438,6 +440,77 @@ class Brep(object):
             for poly in face:
                 poly.reverse()
 
+    # ---- bounding box, copies and moves
+
+    def _points(self):
+        return np.array([p for poly in self._polygons() for p in poly])
+
+    def GetBoundingBox(self, accurate):
+        pts = self._points()
+        return BoundingBox(Point3d(*pts.min(axis=0)), Point3d(*pts.max(axis=0)))
+
+    def DuplicateBrep(self):
+        copy = Brep([[[p.copy() for p in poly] for poly in face] for face in self.Faces])
+        copy.tolerance = self.tolerance
+        return copy
+
+    def Translate(self, v):
+        for poly in self._polygons():
+            for p in poly:
+                p += v._a()
+        return True
+
+    @staticmethod
+    def CreateFromBox(box):
+        """A box as six outward quads."""
+        (x0, y0, z0), (x1, y1, z1) = box.Min._a(), box.Max._a()
+        return _cells_to_breps(*_grid([x0, x1], [y0, y1], [z0, z1], lambda c: True))[0]
+
+    # ---- Booleans, for Breps whose faces are all axis-aligned rectangles
+
+    @staticmethod
+    def CreateBooleanUnion(breps, tolerance):
+        breps = list(breps)
+        if not all(b._boxy() for b in breps):
+            return None
+        xs, ys, zs = _grid_of(breps)
+        return _cells_to_breps(xs, ys, zs, [c for c in _all_cells(xs, ys, zs)
+                                             if any(b._inside(_centre(xs, ys, zs, c)) for b in breps)])
+
+    @staticmethod
+    def CreateBooleanIntersection(a, b, tolerance):
+        if not (a._boxy() and b._boxy()):
+            return None
+        xs, ys, zs = _grid_of([a, b])
+        cells = [c for c in _all_cells(xs, ys, zs)
+                 if a._inside(_centre(xs, ys, zs, c)) and b._inside(_centre(xs, ys, zs, c))]
+        return _cells_to_breps(xs, ys, zs, cells) if cells else []
+
+    @property
+    def Vertices(self):
+        return _BrepVertices(_BrepVertex(p) for p in self._points())
+
+    def IsPointInside(self, point, tolerance, strictly_in):
+        return self._inside(point._a())
+
+    def _boxy(self):
+        """Every face polygon is a rectangle square to an axis."""
+        for poly in self._polygons():
+            spread = np.ptp(np.array(poly), axis=0)
+            if len(poly) != 4 or np.sum(spread < 1e-12) != 1:
+                return False
+        return True
+
+    def _inside(self, p):
+        """Ray along +X: count the X-facing rectangles it passes through."""
+        hits = 0
+        for poly in self._polygons():
+            a = np.array(poly)
+            lo, hi = a.min(axis=0), a.max(axis=0)
+            if hi[0] - lo[0] < 1e-12 and lo[0] > p[0] and lo[1] < p[1] < hi[1] and lo[2] < p[2] < hi[2]:
+                hits += 1
+        return hits % 2 == 1
+
     def MergeCoplanarFaces(self, tolerance):
         """Join faces that share an edge and lie on the same plane (normal and
         offset rounded to the tolerance)."""
@@ -478,7 +551,123 @@ class Brep(object):
         return merged
 
 
+class _BrepVertex(object):
+    def __init__(self, p):
+        self.Location = Point3d(*p)
+
+
+class _BrepVertices(list):
+    @property
+    def Count(self):
+        return len(self)
+
+
+class BoundingBox(object):
+    def __init__(self, a, b):
+        self.Min, self.Max = a, b
+
+
+class VolumeMassProperties(object):
+    def __init__(self, volume):
+        self.Volume = volume
+
+    @staticmethod
+    def Compute(brep):
+        return VolumeMassProperties(brep._volume()) if brep.IsSolid else None
+
+
+def _grid_of(breps):
+    pts = np.concatenate([b._points() for b in breps])
+    return [sorted(set(np.round(pts[:, k], 9))) for k in range(3)]
+
+
+def _all_cells(xs, ys, zs):
+    return [(i, j, k) for i in range(len(xs) - 1) for j in range(len(ys) - 1) for k in range(len(zs) - 1)]
+
+
+def _centre(xs, ys, zs, c):
+    i, j, k = c
+    return ((xs[i] + xs[i + 1]) / 2, (ys[j] + ys[j + 1]) / 2, (zs[k] + zs[k + 1]) / 2)
+
+
+def _grid(xs, ys, zs, keep):
+    return xs, ys, zs, [c for c in _all_cells(xs, ys, zs) if keep(c)]
+
+
+_STEPS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+
+
+def _boundary_corners(cells):
+    """Grid corners (index triples) on the faces between the cells and the rest."""
+    out = set()
+    for c in cells:
+        for axis in range(3):
+            for side in (1, -1):
+                n = list(c)
+                n[axis] += side
+                if tuple(n) in cells:
+                    continue
+                u, v = (axis + 1) % 3, (axis + 2) % 3
+                for du in (0, 1):
+                    for dv in (0, 1):
+                        k = list(c)
+                        k[axis] += 1 if side > 0 else 0
+                        k[u] += du
+                        k[v] += dv
+                        out.add(tuple(k))
+    return out
+
+
+def _cells_to_breps(xs, ys, zs, cells):
+    """Face-connected groups of grid cells, each as a Brep of outward cell-face quads."""
+    cells = set(cells)
+    out = []
+    while cells:
+        todo = [cells.pop()]
+        group = set(todo)
+        while todo:
+            i, j, k = todo.pop()
+            for d in _STEPS:
+                n = (i + d[0], j + d[1], k + d[2])
+                if n in cells:
+                    cells.discard(n)
+                    group.add(n)
+                    todo.append(n)
+        faces = []
+        g = (xs, ys, zs)
+        for c in group:
+            for axis in range(3):
+                for side in (1, -1):
+                    n = list(c)
+                    n[axis] += side
+                    if tuple(n) in group:
+                        continue
+                    u, v = (axis + 1) % 3, (axis + 2) % 3
+                    corner = [None] * 3
+                    quad = []
+                    for du, dv in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                        corner[axis] = g[axis][c[axis] + (1 if side > 0 else 0)]
+                        corner[u] = g[u][c[u] + du]
+                        corner[v] = g[v][c[v] + dv]
+                        quad.append(np.array(corner, dtype=float))
+                    if side < 0:
+                        quad.reverse()
+                    faces.append([quad])
+        out.append(Brep(faces))
+    return out
+
+
 class _Intersection(object):
+    @staticmethod
+    def BrepBrep(a, b, tolerance):
+        """(True, curves, points). Curves exist where the two boundaries meet
+        (a piece fully inside the other gives none, as in Rhino)."""
+        xs, ys, zs = _grid_of([a, b])
+        ina = set(c for c in _all_cells(xs, ys, zs) if a._inside(_centre(xs, ys, zs, c)))
+        inb = set(c for c in _all_cells(xs, ys, zs) if b._inside(_centre(xs, ys, zs, c)))
+        meet = _boundary_corners(ina) & _boundary_corners(inb)
+        return True, ([Line(Point3d(), Point3d(1, 0, 0))] if meet else []), []
+
     @staticmethod
     def MeshPlane(mesh, plane):
         """Closed or open section polylines of a mesh by a plane, or None.
@@ -551,7 +740,7 @@ def install():
     geometry = types.ModuleType("Rhino.Geometry")
     intersect = types.ModuleType("Rhino.Geometry.Intersect")
     for cls in (Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Line, PolylineCurve, Mesh,
-                Brep, BrepSolidOrientation):
+                Brep, BrepSolidOrientation, BoundingBox, VolumeMassProperties):
         setattr(geometry, cls.__name__, cls)
     intersect.Intersection = _Intersection
     geometry.Intersect = intersect
