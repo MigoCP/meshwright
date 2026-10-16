@@ -1,6 +1,13 @@
 # solidwright
 
-Turn rough meshes into clean, verified solids for Rhino and Grasshopper.
+[![tests](https://github.com/MigoCP/solidwright/actions/workflows/tests.yml/badge.svg)](https://github.com/MigoCP/solidwright/actions/workflows/tests.yml)
+[![version](https://img.shields.io/github/v/tag/MigoCP/solidwright?label=version)](https://github.com/MigoCP/solidwright/tags)
+![Rhino 8](https://img.shields.io/badge/Rhino-8-informational)
+![Python](https://img.shields.io/badge/python-IronPython%202.7%20%7C%203.9%2B-informational)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+Verified solid modelling for Rhino and Grasshopper: mesh to solid, checked
+Booleans, robust sweeps. Every result graded.
 
 ![A noisy mesh, Rhino's ToNURBS + MergeAllCoplanarFaces result and solidwright's MeshToSolid result turning side by side, one colour per Brep face](docs/demo.gif)
 
@@ -10,52 +17,39 @@ per flat region). Each Brep face has its own colour. Captured in Rhino 8.*
 
 solidwright is a set of Grasshopper components and the Python library behind
 them. It checks meshes, finds how a part sits, rebuilds faceted meshes as
-exact solids, builds clearance solids around parts, and wraps a few Rhino
-operations that fail quietly (Boolean union and difference, Sweep1) in checks that say
-when they did. Every component reports how it went.
+exact solids, builds clearance solids around parts, and wraps Rhino
+operations that fail quietly (Boolean union and difference, Sweep1) in
+checks that say when they did. Every component reports how it went.
 
 ## Components
 
 **Meshes and parts**
 
-- **MeshHealth**: checks a mesh and cleans what can be cleaned safely:
-  welds vertices, removes zero-area and duplicate faces, drops loose junk,
-  makes face directions consistent. Then grades what is left (holes, extra
-  pieces, non-manifold edges).
-- **NaturalAxis**: the direction a part obviously sits along (the axis of
-  a turned or faceted body, the normal of a plate), at any orientation, or
-  a check of an axis you give it.
-- **ProfileFit**: a part's side outline and where it bends, as a
-  three-piece broken line.
-- **SizeGroups**: sorts parts into size groups, by reference parts, by a
-  count, or by gaps in size.
+| Component | What it does | More |
+|---|---|---|
+| **MeshHealth** | Checks a mesh and cleans what is safe to clean (welds vertices, removes zero-area and duplicate faces, drops loose junk, fixes face directions), then grades what is left: holes, extra pieces, non-manifold edges. | |
+| **NaturalAxis** | The direction a part obviously sits along (the axis of a turned or faceted body, the normal of a plate), at any orientation, or a check of an axis you give it. | [mirror-plane trap](docs/mirror-plane-trap.md) |
+| **ProfileFit** | A part's side outline and where it bends, as a three-piece broken line. | |
+| **SizeGroups** | Sorts parts into size groups, by reference parts, by a count, or by gaps in size. | |
 
 **Solids**
 
-- **MeshToSolid**: a closed Brep with one exact flat face per planar region
-  of a mesh, convex or not, holes included (see the comparison with Rhino
-  below).
-- **OffsetSolid**: a closed solid around a faceted convex part, every facet
-  pushed out by a clearance (sideways only, or all round).
-- **ClearanceSolid**: a closed solid around any part, curved and scanned
-  ones included, built from cross sections kept a clearance away sideways.
-- **DomeCap**: rounded caps on flat outlines, or a part cut by a plane and
-  capped.
+| Component | What it does | More |
+|---|---|---|
+| **MeshToSolid** | A closed Brep with one exact flat face per planar region of a mesh, convex or not, holes included. Where Rhino's `ToNURBS` + `MergeAllCoplanarFaces` leaves big faces split (74 faces for the plate above), it gives the right 30, with corners up to 6 times closer. | [compared with Rhino](docs/mesh-to-solid-vs-rhino.md) |
+| **OffsetSolid** | A closed solid around a faceted convex part, every facet pushed out by a clearance (sideways only, or all round). Corners the offset splits are merged only when the result passes its checks. | [split corners](docs/split-corners-and-validated-merge.md) |
+| **ClearanceSolid** | A closed solid around any part, curved and scanned ones included, built from cross sections kept a clearance away sideways. | [cutting in between sections](docs/interpolation-cuts-between-kinks.md) |
+| **DomeCap** | Rounded caps on flat outlines, or a part cut by a plane and capped. | |
 
 **Booleans, sweeps and shaping**
 
-- **VerifiedUnion**: Boolean union of many solids, one at a time, every
-  result checked so a piece the union silently dropped is caught.
-- **VerifiedDifference**: Boolean difference with many cutters, the ones
-  that break it isolated and rescued, every result checked so a cutter the
-  difference silently skipped is caught.
-- **RobustSweep**: a one-rail sweep that places and aligns the sections
-  itself and falls back through several methods, reporting which one
-  worked.
-- **Deform**: compresses, curls or radially fits parts above a height along
-  an axis.
-- **StackAlongAxis**: lines parts up end to end along any axis with a fixed
-  gap.
+| Component | What it does | More |
+|---|---|---|
+| **VerifiedUnion** | Boolean union of many solids, one at a time, every result checked. Catches a piece the union dropped without saying so, and solids touching along an edge that give an open Brep. | [verified union](docs/verified-union.md) |
+| **VerifiedDifference** | Boolean difference with many cutters, the ones that break it isolated and rescued, every result checked. Catches a cutter the difference skipped without saying so, and open Breps. | [verified difference](docs/verified-difference.md) |
+| **RobustSweep** | A one-rail sweep that places and aligns the sections itself and falls back through seven methods, reporting which one worked; Info lists every attempt. | |
+| **Deform** | Compresses, curls or radially fits parts above a height along an axis. | |
+| **StackAlongAxis** | Lines parts up end to end along any axis with a fixed gap. | |
 
 Every component has three extra outputs:
 
@@ -102,6 +96,26 @@ Each file in `components/` is one Grasshopper component.
 Inputs marked optional can be left unconnected or removed from the
 component.
 
+## Using the library from Python
+
+The components are thin wrappers, so the same tools work in any Rhino
+Python script. Every tool returns its result with a report:
+
+```python
+from solidwright.core import difference_plan
+from solidwright.rhino.difference import BrepOps
+
+res = difference_plan.cut(plate, cutters, BrepOps(0.001), 0.001)
+print(res.report)            # status and every reason, one per line
+if res.report.ok:            # good or warning
+    solids = res.solids
+else:
+    print("cutters not applied:", sorted(res.failed))
+```
+
+The geometry checks and planning live in `solidwright.core`, which never
+imports Rhino; `solidwright.rhino` holds the RhinoCommon calls.
+
 ## Supported versions
 
 | Rhino | Python | Status |
@@ -128,66 +142,13 @@ The library itself (`solidwright.core`) is tested in CI on Python 3.9 and
 - **Tested without Rhino.** Tests use procedural geometry and a small mock of
   the RhinoCommon pieces the adapters touch.
 
-## Planar mesh to solid, compared with Rhino
-
-`MeshToSolid` turns a closed mesh of a part made of flat faces into a Brep
-with one exact flat face per planar region (parts that are not convex and
-faces with holes included). Rhino's own route is `ToNURBS` followed by
-`MergeAllCoplanarFaces`. Both were run in Rhino 8 on the same meshes, each
-tilted 37 degrees and moved off the origin, with a tolerance of 0.001 and
-Rhino's default 1 degree angle tolerance. The test parts are 1 to 4 units
-across; the meshes are dense (every face split into many triangles), with
-random noise added to the vertices or stored in single precision far from
-the origin, as an STL export there would be.
-
-*Corners off* is how far the result's corners are from the true solid (the
-largest distance, in model units).
-
-| Part | Mesh | Right faces | solidwright faces | corners off | time | Rhino faces | corners off | time |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| box | noise 1e-4 | 6 | 6 | 7.5e-5 | 0.01 s | 6 | 1.6e-4 | 0.06 s |
-| L block | noise 1e-4 | 8 | 8 | 1.3e-4 | 0.02 s | 8 | 1.8e-4 | 0.13 s |
-| U block | noise 1e-4 | 10 | 10 | 1.0e-4 | 0.03 s | 10 | 2.4e-4 | 0.22 s |
-| frame (square hole) | noise 1e-4 | 10 | 10 | 1.3e-4 | 0.04 s | 10 | 1.7e-4 | 0.29 s |
-| faceted part | noise 1e-4 | 65 | 65 | 1.5e-4 | 0.16 s | **221** | 3.0e-4 | 3.0 s |
-| plate, round hole | noise 1e-4 | 30 | 30 | 8.7e-5 | 0.16 s | **74** | 2.9e-4 | 4.3 s |
-| box | single precision, far | 6 | 6 | 9.9e-6 | 0.01 s | 6 | 6.1e-5 | 0.06 s |
-| L block | single precision, far | 8 | 8 | 2.5e-5 | 0.02 s | 8 | 3.6e-5 | 0.13 s |
-| U block | single precision, far | 10 | 10 | 2.5e-5 | 0.02 s | 10 | 5.0e-5 | 0.21 s |
-| frame (square hole) | single precision, far | 10 | 10 | 1.3e-5 | 0.03 s | 10 | 6.1e-5 | 0.27 s |
-| faceted part | single precision, far | 65 | 65 | 3.0e-5 | 0.10 s | **91** | 5.9e-5 | 2.6 s |
-| plate, round hole | single precision, far | 30 | 30 | 2.9e-5 | 0.15 s | **35** | 6.2e-5 | 4.0 s |
-
-- **Clean meshes:** both give the same faces and edges, and both are exact
-  (corners within 2e-14).
-- **Light noise (1e-5):** both find the right faces. solidwright's corners
-  are 1.1 to 2.5 times closer, because each corner is solved from the
-  refitted planes that meet there instead of being taken from one noisy
-  vertex.
-- **Heavier noise (1e-4) and single precision far from the origin:**
-  Rhino leaves faces split into pieces on the parts with many or narrow
-  faces. solidwright keeps them whole by joining neighbouring pieces while
-  they stay flat within half the tolerance. Its corners are closer in every
-  case, up to 6 times.
-- **Validity:** every result from both is a valid closed solid with no open
-  edges. The largest edge tolerance in a solidwright result was 7.9e-5 (the
-  noisy faceted part); Rhino's were 0.
-- **A Rhino-meshed CAD part** (a box with a cylinder hole, single precision
-  render mesh): both give 46 faces; corners off 1.6e-7 (solidwright) and
-  3.4e-7 (Rhino).
-- **Speed:** times are for Rhino 8's CPython. In IronPython (GHPython)
-  solidwright took about the same, after about 0.3 s of start-up on its
-  first run. The real `ToNURBS` and `MergeAllCoplanarFaces` commands gave
-  the same results as their RhinoCommon calls, slightly slower.
-- **Noise beyond the tolerance:** when the noise is too large for faces to
-  be flat within half the tolerance, solidwright cannot join them either. It
-  then reports that the mesh looks noisier than the tolerance instead of
-  grading the result good.
-
 ## Write-ups
 
 Short notes on the problems that took the most thought, with numbers:
 
+- [Planar mesh to solid, compared with Rhino](docs/mesh-to-solid-vs-rhino.md):
+  `MeshToSolid` and Rhino's `ToNURBS` + `MergeAllCoplanarFaces` on the same
+  noisy and single precision meshes: faces, accuracy and time.
 - [The mirror-plane trap](docs/mirror-plane-trap.md): why a side view of a
   symmetric part looks as level as its true axis, and what decides.
 - [Why interpolating between sections cuts into the part](docs/interpolation-cuts-between-kinks.md):
