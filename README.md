@@ -1,7 +1,7 @@
 # solidwright
 
 [![tests](https://github.com/MigoCP/solidwright/actions/workflows/tests.yml/badge.svg)](https://github.com/MigoCP/solidwright/actions/workflows/tests.yml)
-[![version](https://img.shields.io/github/v/tag/MigoCP/solidwright?label=version)](https://github.com/MigoCP/solidwright/tags)
+[![version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/MigoCP/solidwright/tags)
 ![Rhino 8](https://img.shields.io/badge/Rhino-8-informational)
 ![Python](https://img.shields.io/badge/python-IronPython%202.7%20%7C%203.9%2B-informational)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
