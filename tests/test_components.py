@@ -146,3 +146,94 @@ def test_verified_union_component_failures():
     del opened.Faces[0]
     out = run_component("VerifiedUnion", B=[_box(0, 0, 0, 2, 2, 2), opened])
     assert out["Status"] == 3 and "input 1 is open" in out["Info"]
+
+
+def test_size_groups_component():
+    sides = [1.0, 1.5, 1.02, 2.0, 1.49]
+    parts = [rg.Mesh.from_trimesh(shapes.randomly_placed(shapes.box((s, s, s)), shapes.rng(k))[0])
+             for k, s in enumerate(sides)]
+    out = run_component("SizeGroups", G=parts)
+    assert out["Status"] == 0, out["Info"]
+    assert out["Index"] == [0, 1, 0, 2, 1]
+    assert [len(b) for b in out["Groups"]] == [2, 2, 1]
+    assert abs(out["Sizes"][2] - 2.0) < 1e-9
+    refs = [rg.Mesh.from_trimesh(shapes.box((s, s, s))) for s in (2.0, 1.0)]
+    out = run_component("SizeGroups", G=parts, Refs=refs)
+    assert out["Index"] == [0, 1, 0, 1, 1]  # 1.5 is nearer 2 than 1 on a log scale
+
+
+def test_size_groups_component_open_parts_and_nothing():
+    v, f = shapes.box().as_lists()
+    opened = rg.Mesh.from_trimesh(shapes.TriMesh(v, f[:-2]))
+    out = run_component("SizeGroups", G=[rg.Mesh.from_trimesh(shapes.box()), opened])
+    assert out["Status"] == 1 and "input 1 is open: every part measured by area" in out["Info"]
+    assert run_component("SizeGroups")["Status"] == 3
+
+
+def test_stack_along_axis_component():
+    parts = [_box(0, 0, 5, 1, 1, 6), _box(2, 0, 0, 3, 1, 2), rg.Mesh.from_trimesh(shapes.box((1.0, 1.0, 0.5)))]
+    out = run_component("StackAlongAxis", G=parts, Gap=0.1)
+    assert out["Status"] == 0 and out["Order"] == [1, 2, 0]
+    lows = [m.GetBoundingBox(True).Min.Z for m in out["Moved"]]
+    assert abs(lows[1] - 0.0) < 1e-12 and abs(lows[2] - 2.1) < 1e-12 and abs(lows[0] - 2.7) < 1e-12
+    assert parts[0].GetBoundingBox(True).Min.Z == 5.0  # inputs are not moved
+    # A tilted axis: parts end up spaced along it, measured in that direction.
+    axis = rg.Vector3d(1.0, 0.0, 1.0)
+    out = run_component("StackAlongAxis", G=[_box(0, 0, 0, 1, 1, 1), _box(0, 0, 0, 1, 1, 1)], Gap=0.0, A=axis)
+    shift = out["Moved"][1].GetBoundingBox(True).Min
+    assert abs(shift.X - 1.0) < 1e-9 and abs(shift.Z - 1.0) < 1e-9  # the box is 2/sqrt(2) long along it
+
+
+def test_stack_along_axis_component_failures():
+    assert run_component("StackAlongAxis")["Status"] == 3
+    out = run_component("StackAlongAxis", G=[_box(0, 0, 0, 1, 1, 1)], A=rg.Vector3d(0, 0, 0))
+    assert out["Status"] == 3 and "zero vector" in out["Info"]
+
+
+def _zs(geometry):
+    box = geometry.GetBoundingBox(True)
+    return box.Min.Z, box.Max.Z
+
+
+def test_deform_component_compress():
+    rod = _box(-0.5, -0.5, 0, 0.5, 0.5, 4)
+    out = run_component("Deform", G=[rod], Mode=0, K=0.5)
+    assert out["Status"] == 0, out["Info"]
+    assert _zs(out["Out"][0]) == (0.0, 2.0) and out["Out"][0].IsSolid
+    out = run_component("Deform", G=[rod], Mode=0, K=0.5, S=0.5)  # through the morph: above z = 2 only
+    assert _zs(out["Out"][0]) == (0.0, 3.0)
+    assert _zs(rod) == (0.0, 4.0)
+    assert run_component("Deform", G=[rod], Mode=0, K=0.0)["Status"] == 3
+
+
+def test_deform_component_curl_and_fit():
+    rod = rg.Mesh.from_trimesh(shapes.subdivided(shapes.moved(shapes.box((0.2, 0.2, 2.0)), translation=(0.9, -0.1, 0.0)), 2))
+    out = run_component("Deform", G=[rod], Mode=1, Ang=90.0, S=0.5)
+    assert out["Status"] == 0, out["Info"]
+    assert abs(out["Hinge"].Radius - 1.0) < 0.05 and out["Hinge"].Center.Z == 1.0
+    top = out["Out"][0].GetBoundingBox(True)
+    assert top.Max.Z < 2.0 and top.Min.X < 0.9  # the top rolled in towards the axis
+    square = rg.PolylineCurve([rg.Point3d(x, y, 0) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1))])
+    big = rg.PolylineCurve([rg.Point3d(2 * x, 2 * y, 0) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1))])
+    block = _box(-1, -1, 0, 1, 1, 1)
+    out = run_component("Deform", G=[block], Mode=2, From=square, To=big, S=1.0)
+    assert out["Status"] == 0, out["Info"]
+    box = out["Out"][0].GetBoundingBox(True)
+    assert abs(box.Max.X - 2.0) < 1e-6 and abs(box.Min.Y + 2.0) < 1e-6
+    assert run_component("Deform", G=[block], Mode=2, From=square)["Status"] == 3
+
+
+def test_deform_component_bad_inputs():
+    assert run_component("Deform")["Status"] == 3
+    block = _box(0, 0, 0, 1, 1, 1)
+    assert "Mode must be" in run_component("Deform", G=[block], Mode=5)["Info"]
+    assert "S must be" in run_component("Deform", G=[block], S=2.0)["Info"]
+
+
+def test_robust_sweep_component_bad_inputs():
+    # The sweep itself needs real Rhino curves (checked in Rhino); here only the input handling.
+    out = run_component("RobustSweep")
+    assert out["Status"] == 3 and "no rail curve" in out["Info"] and out["Brep"] == []
+    rail = rg.PolylineCurve([rg.Point3d(0, 0, 0), rg.Point3d(1, 0, 0)])
+    assert "no section curves" in run_component("RobustSweep", Rail=rail)["Info"]
+    assert "the miter must be" in run_component("RobustSweep", Rail=rail, Sec=[rail], Miter=5)["Info"]
