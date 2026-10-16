@@ -9,8 +9,8 @@ Mesh (Vertices, Faces, TopologyVertices), Intersect.Intersection.MeshPlane and
 a polygon-soup Brep: just enough of Brep (planar faces, join, from mesh, merge
 coplanar faces, solid tests) to exercise solidwright.rhino.build. Set
 Brep.fail_planar = True to make CreatePlanarBreps fail, as it can in Rhino.
-Booleans, BoundingBox, VolumeMassProperties and Intersection.BrepBrep work
-for Breps made of axis-aligned boxes (Brep.CreateFromBox), on a grid of cells.
+Booleans, BoundingBox, VolumeMassProperties, Intersection.BrepBrep and the
+face calls (Domain, PointAt, NormalAt, IsPointOnFace) work for Breps made of axis-aligned boxes (Brep.CreateFromBox), on a grid of cells.
 """
 
 from __future__ import division
@@ -481,9 +481,76 @@ class BrepSolidOrientation(object):
 
 
 class _BrepFaces(list):
+    def __init__(self, faces=()):
+        list.__init__(self, (f if isinstance(f, _BrepFace) else _BrepFace(f) for f in faces))
+
     @property
     def Count(self):
         return len(self)
+
+
+class Interval(object):
+    def __init__(self, t0, t1):
+        self.T0, self.T1 = t0, t1
+
+    @property
+    def Mid(self):
+        return (self.T0 + self.T1) / 2.0
+
+    def ParameterAt(self, t):
+        return self.T0 + t * (self.T1 - self.T0)
+
+
+class PointFaceRelation(object):
+    Unknown = 0
+    Exterior = 1
+    Interior = 2
+    Boundary = 3
+
+
+class _BrepFace(list):
+    """One planar face (a list of polygons) with the parameter calls of a BrepFace.
+    (u, v) are the world coordinates along the two axes that span the face best."""
+
+    OrientationIsReversed = False
+
+    def _frame(self):
+        n = np.zeros(3)
+        for poly in self:
+            for i in range(len(poly)):
+                n += np.cross(poly[i], poly[(i + 1) % len(poly)])
+        n = _unit(n)
+        a = int(np.argmax(np.abs(n)))
+        return n, a, (a + 1) % 3, (a + 2) % 3, float(np.dot(n, self[0][0]))
+
+    def Domain(self, direction):
+        _n, _a, u, v, _d = self._frame()
+        k = u if direction == 0 else v
+        vals = [p[k] for poly in self for p in poly]
+        return Interval(min(vals), max(vals))
+
+    def PointAt(self, s, t):
+        n, a, u, v, d = self._frame()
+        p = np.zeros(3)
+        p[u], p[v] = s, t
+        p[a] = (d - n[u] * s - n[v] * t) / n[a]
+        return Point3d(*p)
+
+    def NormalAt(self, s, t):
+        return Vector3d(*self._frame()[0])
+
+    def IsPointOnFace(self, s, t):
+        _n, _a, u, v, _d = self._frame()
+        for poly in self:
+            inside = False
+            for i in range(len(poly)):
+                p, q = poly[i], poly[(i + 1) % len(poly)]
+                if (p[v] > t) != (q[v] > t):
+                    if s < p[u] + (t - p[v]) * (q[u] - p[u]) / (q[v] - p[v]):
+                        inside = not inside
+            if inside:
+                return PointFaceRelation.Interior
+        return PointFaceRelation.Exterior
 
 
 class Brep(object):
@@ -623,6 +690,28 @@ class Brep(object):
                  if a._inside(_centre(xs, ys, zs, c)) and b._inside(_centre(xs, ys, zs, c))]
         return _cells_to_breps(xs, ys, zs, cells) if cells else []
 
+    @staticmethod
+    def CreateBooleanDifference(first, second, tolerance, manifold_only=True):
+        """Every Brep of first minus every Brep of second (single Breps or lists).
+        Nothing at all when a cutter lies wholly inside, as in Rhino."""
+        first = [first] if isinstance(first, Brep) else list(first)
+        second = [second] if isinstance(second, Brep) else list(second)
+        if not all(b._boxy() for b in first + second):
+            return None
+        for c in second:
+            for b in first:
+                if not _Intersection.BrepBrep(b, c, tolerance)[1] and b._inside(c._points().mean(axis=0)):
+                    return []
+        xs, ys, zs = _grid_of(first + second)
+
+        def keep(c):
+            p = _centre(xs, ys, zs, c)
+            return any(b._inside(p) for b in first) and not any(b._inside(p) for b in second)
+        return _cells_to_breps(xs, ys, zs, [c for c in _all_cells(xs, ys, zs) if keep(c)])
+
+    def Append(self, other):
+        self.Faces.extend(_BrepFace(f) for f in other.Faces)
+
     @property
     def Vertices(self):
         return _BrepVertices(_BrepVertex(p) for p in self._points())
@@ -639,12 +728,13 @@ class Brep(object):
         return True
 
     def _inside(self, p):
-        """Ray along +X: count the X-facing rectangles it passes through."""
+        """Ray along +X: count the X-facing rectangles it passes through
+        (half-open, so a ray along a shared edge counts it once)."""
         hits = 0
         for poly in self._polygons():
             a = np.array(poly)
             lo, hi = a.min(axis=0), a.max(axis=0)
-            if hi[0] - lo[0] < 1e-12 and lo[0] > p[0] and lo[1] < p[1] < hi[1] and lo[2] < p[2] < hi[2]:
+            if hi[0] - lo[0] < 1e-12 and lo[0] > p[0] and lo[1] <= p[1] < hi[1] and lo[2] <= p[2] < hi[2]:
                 hits += 1
         return hits % 2 == 1
 
@@ -907,8 +997,8 @@ def install():
     geometry = types.ModuleType("Rhino.Geometry")
     intersect = types.ModuleType("Rhino.Geometry.Intersect")
     for cls in (Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Line, PolylineCurve, Mesh,
-                Brep, BrepSolidOrientation, BoundingBox, VolumeMassProperties, AreaMassProperties, Circle,
-                MeshingParameters, SpaceMorph):
+                Brep, BrepSolidOrientation, BoundingBox, Interval, PointFaceRelation, VolumeMassProperties,
+                AreaMassProperties, Circle, MeshingParameters, SpaceMorph):
         setattr(geometry, cls.__name__, cls)
     intersect.Intersection = _Intersection
     geometry.Intersect = intersect
