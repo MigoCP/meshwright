@@ -127,9 +127,13 @@ class Plane(object):
         y = np.cross(z, x)
         self._o, self._x, self._y, self._z = o, x, y, z
 
-    @staticmethod
-    def WorldXY():
-        return Plane(Point3d(0, 0, 0), Vector3d(1, 0, 0), Vector3d(0, 1, 0))
+    class _WorldXY(object):
+        """A static property in RhinoCommon: a fresh plane on every read."""
+
+        def __get__(self, obj, cls):
+            return Plane(Point3d(0, 0, 0), Vector3d(1, 0, 0), Vector3d(0, 1, 0))
+
+    WorldXY = _WorldXY()
 
     @property
     def Origin(self):
@@ -158,6 +162,15 @@ class Plane(object):
         return Point3d(*(self._o + u * self._x + v * self._y + w * self._z))
 
 
+def _box_of(points, plane_or_flag):
+    pts = np.asarray(points, dtype=float).reshape(-1, 3)
+    if isinstance(plane_or_flag, Plane):
+        pl = plane_or_flag
+        d = pts - pl._o
+        pts = np.stack([d.dot(pl._x), d.dot(pl._y), d.dot(pl._z)], axis=1)
+    return BoundingBox(Point3d(*pts.min(axis=0)), Point3d(*pts.max(axis=0)))
+
+
 class Transform(object):
     def __init__(self, matrix=None):
         self.M = np.eye(4) if matrix is None else np.array(matrix, dtype=float)
@@ -171,6 +184,13 @@ class Transform(object):
         m = np.eye(4)
         m[:3, 3] = [v.X, v.Y, v.Z]
         return Transform(m)
+
+    @staticmethod
+    def Scale(plane, sx, sy, sz):
+        """Scale by sx, sy, sz along the plane's axes, about its origin."""
+        f = np.eye(4)
+        f[:3, 0], f[:3, 1], f[:3, 2], f[:3, 3] = plane._x, plane._y, plane._z, plane._o
+        return Transform(f.dot(np.diag([sx, sy, sz, 1.0])).dot(np.linalg.inv(f)))
 
     @staticmethod
     def PlaneToPlane(a, b):
@@ -318,6 +338,54 @@ class Mesh(object):
         n = self.Vertices.Count
         return all(0 <= i < n for f in self.Faces for i in (f.A, f.B, f.C, f.D))
 
+    def _triangles(self):
+        for f in self.Faces:
+            ids = [f.A, f.B, f.C] + ([f.D] if f.IsQuad else [])
+            pts = [self.Vertices.Point3dAt(i)._a() for i in ids]
+            for k in range(1, len(pts) - 1):
+                yield pts[0], pts[k], pts[k + 1]
+
+    def GetBoundingBox(self, accurate_or_plane):
+        return _box_of([self.Vertices.Point3dAt(i)._a() for i in range(self.Vertices.Count)], accurate_or_plane)
+
+    def Duplicate(self):
+        m = Mesh()
+        m.Vertices.UseDoublePrecisionVertices = self.Vertices.UseDoublePrecisionVertices
+        for i in range(self.Vertices.Count):
+            m.Vertices.Add(self.Vertices.Point3dAt(i))
+        for f in self.Faces:
+            m.Faces.AddFace(f.A, f.B, f.C, f.D if f.IsQuad else None)
+        return m
+
+    def Transform(self, xform):
+        exact = [self.Vertices.Point3dAt(i) for i in range(self.Vertices.Count)]
+        del self.Vertices[:]
+        del self.Vertices._exact[:]
+        for p in exact:
+            self.Vertices.Add(*xform._apply_point(p._a()))
+        return True
+
+    @property
+    def IsClosed(self):
+        top = self.TopologyVertices
+        counts = {}
+        for f in self.Faces:
+            ids = [f.A, f.B, f.C] + ([f.D] if f.IsQuad else [])
+            ids = [top.TopologyVertexIndex(i) for i in ids]
+            for k in range(len(ids)):
+                e = tuple(sorted((ids[k], ids[(k + 1) % len(ids)])))
+                counts[e] = counts.get(e, 0) + 1
+        return bool(counts) and all(c == 2 for c in counts.values())
+
+    @staticmethod
+    def CreateFromBrep(brep, parameters):
+        m = Mesh()
+        for poly in brep._polygons():
+            ids = [m.Vertices.Add(*p) for p in poly]
+            for k in range(1, len(ids) - 1):
+                m.Faces.AddFace(ids[0], ids[k], ids[k + 1])
+        return [m]
+
     @staticmethod
     def from_trimesh(trimesh):
         """Test helper (not RhinoCommon): build a mock Mesh from tests.shapes.TriMesh."""
@@ -339,12 +407,70 @@ class Line(object):
 
 
 class PolylineCurve(object):
+    """Parameter t runs 0, 1, 2... over the points, like Rhino's polyline curves."""
+
     def __init__(self, points):
         self.points = [Point3d(p.X, p.Y, p.Z) for p in points]
+
+    def PointAt(self, t):
+        k = min(int(np.floor(t)), len(self.points) - 2)
+        u = t - k
+        a, b = self.points[k]._a(), self.points[k + 1]._a()
+        return Point3d(*(a + u * (b - a)))
+
+    def DivideByCount(self, count, include_ends):
+        """Parameters at equal lengths (closed curves: count points, the end not repeated)."""
+        pts = np.array([p._a() for p in self.points])
+        seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+        cum = np.concatenate([[0.0], np.cumsum(seg)])
+        n = count if self.IsClosed else count + 1
+        out = []
+        for i in range(n):
+            s = cum[-1] * i / count
+            k = min(int(np.searchsorted(cum, s, side="right")) - 1, len(seg) - 1)
+            out.append(k + ((s - cum[k]) / seg[k] if seg[k] > 0 else 0.0))
+        return out
 
     @property
     def IsClosed(self):
         return len(self.points) > 3 and self.points[0] == self.points[-1]
+
+
+class Circle(object):
+    def __init__(self, plane, radius):
+        self.Plane, self.Radius = plane, float(radius)
+
+    @property
+    def Center(self):
+        return self.Plane.Origin
+
+
+class MeshingParameters(object):
+    FastRenderMesh = "fast"
+
+
+class SpaceMorph(object):
+    """Calls MorphPoint on every Brep corner or mesh vertex (the mock Brep is
+    made of flat polygons, so moving its corners is the whole morph)."""
+
+    def __init__(self):
+        self.PreserveStructure = False
+        self.QuickPreview = False
+        self.Tolerance = 0.0
+
+    def Morph(self, geometry):
+        if isinstance(geometry, Mesh):
+            pts = [self.MorphPoint(geometry.Vertices.Point3dAt(i)) for i in range(geometry.Vertices.Count)]
+            del geometry.Vertices[:]
+            del geometry.Vertices._exact[:]
+            for p in pts:
+                geometry.Vertices.Add(p.X, p.Y, p.Z)
+            return True
+        for poly in geometry._polygons():
+            for k in range(len(poly)):
+                q = self.MorphPoint(Point3d(*poly[k]))
+                poly[k][:] = (q.X, q.Y, q.Z)
+        return True
 
 
 class BrepSolidOrientation(object):
@@ -445,9 +571,20 @@ class Brep(object):
     def _points(self):
         return np.array([p for poly in self._polygons() for p in poly])
 
-    def GetBoundingBox(self, accurate):
-        pts = self._points()
-        return BoundingBox(Point3d(*pts.min(axis=0)), Point3d(*pts.max(axis=0)))
+    def GetBoundingBox(self, accurate_or_plane):
+        return _box_of(self._points(), accurate_or_plane)
+
+    def Duplicate(self):
+        return self.DuplicateBrep()
+
+    def MakeDeformable(self):
+        return True
+
+    def Transform(self, xform):
+        for poly in self._polygons():
+            for k in range(len(poly)):
+                poly[k][:] = xform._apply_point(poly[k])
+        return True
 
     def DuplicateBrep(self):
         copy = Brep([[[p.copy() for p in poly] for poly in face] for face in self.Faces])
@@ -572,8 +709,27 @@ class VolumeMassProperties(object):
         self.Volume = volume
 
     @staticmethod
-    def Compute(brep):
-        return VolumeMassProperties(brep._volume()) if brep.IsSolid else None
+    def Compute(geometry):
+        if isinstance(geometry, Mesh):
+            if not geometry.IsClosed:
+                return None
+            return VolumeMassProperties(sum(float(np.dot(a, np.cross(b, c))) for a, b, c in
+                                            geometry._triangles()) / 6.0)
+        return VolumeMassProperties(geometry._volume()) if geometry.IsSolid else None
+
+
+class AreaMassProperties(object):
+    def __init__(self, area):
+        self.Area = area
+
+    @staticmethod
+    def Compute(geometry):
+        if isinstance(geometry, Mesh):
+            tris = geometry._triangles()
+        else:
+            tris = ((poly[0], poly[i], poly[i + 1]) for poly in geometry._polygons()
+                    for i in range(1, len(poly) - 1))
+        return AreaMassProperties(sum(0.5 * float(np.linalg.norm(np.cross(b - a, c - a))) for a, b, c in tris))
 
 
 def _grid_of(breps):
@@ -731,6 +887,17 @@ class _Intersection(object):
         return result
 
 
+class _GenericList(object):
+    """System.Collections.Generic.List: List[T]() gives a list with .Add."""
+
+    class _List(list):
+        def Add(self, item):
+            self.append(item)
+
+    def __getitem__(self, item_type):
+        return self._List
+
+
 def install():
     """Register the mock as the Rhino, Rhino.Geometry and Rhino.Geometry.Intersect modules."""
     if "Rhino" in sys.modules and not getattr(sys.modules["Rhino"], "IS_MOCK", False):
@@ -740,11 +907,23 @@ def install():
     geometry = types.ModuleType("Rhino.Geometry")
     intersect = types.ModuleType("Rhino.Geometry.Intersect")
     for cls in (Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Line, PolylineCurve, Mesh,
-                Brep, BrepSolidOrientation, BoundingBox, VolumeMassProperties):
+                Brep, BrepSolidOrientation, BoundingBox, VolumeMassProperties, AreaMassProperties, Circle,
+                MeshingParameters, SpaceMorph):
         setattr(geometry, cls.__name__, cls)
     intersect.Intersection = _Intersection
     geometry.Intersect = intersect
     rhino.Geometry = geometry
+    if "System" not in sys.modules:
+        system = types.ModuleType("System")
+        system.Double = float
+        collections = types.ModuleType("System.Collections")
+        generic = types.ModuleType("System.Collections.Generic")
+        generic.List = _GenericList()
+        system.Collections = collections
+        collections.Generic = generic
+        sys.modules["System"] = system
+        sys.modules["System.Collections"] = collections
+        sys.modules["System.Collections.Generic"] = generic
     sys.modules["Rhino"] = rhino
     sys.modules["Rhino.Geometry"] = geometry
     sys.modules["Rhino.Geometry.Intersect"] = intersect

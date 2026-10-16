@@ -34,3 +34,22 @@ def show_report(ghenv, report):
         return
     level = Level.Error if report.failed else Level.Warning
     ghenv.Component.AddRuntimeMessage(level, report.summary())
+
+
+def tree(branches):
+    """A Grasshopper DataTree with branch {k} holding branches[k] (empty ones included).
+
+    Outside Grasshopper (tests, plain Rhino scripts) the list of lists is returned as is.
+    """
+    try:
+        from Grasshopper import DataTree
+        from Grasshopper.Kernel.Data import GH_Path
+    except Exception:
+        return [list(b) for b in branches]
+    out = DataTree[object]()
+    for k, items in enumerate(branches):
+        path = GH_Path(k)
+        out.EnsurePath(path)
+        for item in items:
+            out.Add(item, path)
+    return out

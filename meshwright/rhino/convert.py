@@ -6,6 +6,8 @@ returns is plain Python, ready for meshwright.core.
 
 from __future__ import absolute_import, division
 
+import math
+
 import Rhino.Geometry as rg
 
 
@@ -102,6 +104,18 @@ def document_tolerance(default=0.001):
         doc = Rhino.RhinoDoc.ActiveDoc
         if doc is not None:
             return doc.ModelAbsoluteTolerance
+    except Exception:
+        pass
+    return default
+
+
+def document_angle_tolerance(default=math.radians(1.0)):
+    """The active document's angle tolerance in radians, or default (1 degree) outside Rhino."""
+    try:
+        import Rhino
+        doc = Rhino.RhinoDoc.ActiveDoc
+        if doc is not None:
+            return doc.ModelAngleToleranceRadians
     except Exception:
         pass
     return default

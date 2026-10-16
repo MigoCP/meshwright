@@ -115,7 +115,7 @@ def test_mesh_plane_open_mesh_gives_open_chain():
 
 
 def test_plane_to_plane_transform():
-    a = rg.Plane.WorldXY()
+    a = rg.Plane.WorldXY
     b = rg.Plane(rg.Point3d(1, 2, 3), rg.Vector3d(1, 0, 0), rg.Vector3d(0, 0, 1))
     x = rg.Transform.PlaneToPlane(a, b)
     p = rg.Point3d(1, 0, 0)
