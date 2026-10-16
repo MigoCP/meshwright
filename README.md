@@ -11,7 +11,7 @@ per flat region). Each Brep face has its own colour. Captured in Rhino 8.*
 solidwright is a set of Grasshopper components and the Python library behind
 them. It checks meshes, finds how a part sits, rebuilds faceted meshes as
 exact solids, builds clearance solids around parts, and wraps a few Rhino
-operations that fail quietly (Boolean union, Sweep1) in checks that say
+operations that fail quietly (Boolean union and difference, Sweep1) in checks that say
 when they did. Every component reports how it went.
 
 ## Components
@@ -46,6 +46,9 @@ when they did. Every component reports how it went.
 
 - **VerifiedUnion**: Boolean union of many solids, one at a time, every
   result checked so a piece the union silently dropped is caught.
+- **VerifiedDifference**: Boolean difference with many cutters, the ones
+  that break it isolated and rescued, every result checked so a cutter the
+  difference silently skipped is caught.
 - **RobustSweep**: a one-rail sweep that places and aligns the sections
   itself and falls back through several methods, reporting which one
   worked.
@@ -193,6 +196,9 @@ Short notes on the problems that took the most thought, with numbers:
   why pushing faces out splits shared corners, and how the merge is checked.
 - [Verified union](docs/verified-union.md): why "it ran" is not "it worked"
   for a Boolean union, and what Rhino actually returns.
+- [Verified difference](docs/verified-difference.md): a closed solid is not
+  proof of a complete cut; what Rhino returns, and the checks that catch a
+  skipped cutter.
 
 ## Layout
 
