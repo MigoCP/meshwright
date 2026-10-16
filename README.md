@@ -51,6 +51,13 @@ checks that say when they did. Every component reports how it went.
 | **Deform** | Compresses, curls or radially fits parts above a height along an axis. | |
 | **StackAlongAxis** | Lines parts up end to end along any axis with a fixed gap. | |
 
+![A plate with 25 holes and a ball inside, cut by Rhino's CreateBooleanDifference and by VerifiedDifference, both shown with a section plane moving in to the ball's centre: Rhino's result is solid there, VerifiedDifference's shows the hollow](docs/difference.gif)
+
+*One Boolean difference with 26 cutters: 25 holes and a ball of radius 0.6
+inside the plate. Rhino returns a valid closed solid with the ball skipped
+and no error (volume 174.867). `VerifiedDifference` catches the skip and cuts
+the ball as a sealed hollow (volume 173.962). Captured in Rhino 8.*
+
 Every component has three extra outputs:
 
 | Output | Meaning |

@@ -37,6 +37,12 @@ Flush faces were not a problem for planar cutters. Two cases did go wrong:
 The second row is the quiet failure: a valid closed solid with the right
 look and the wrong volume. Nothing in the result says a cutter was dropped.
 
+![Rhino's result and VerifiedDifference's, cut by a section plane through the ball's centre: Rhino's is solid there, VerifiedDifference's shows the hollow](difference.gif)
+
+*The same plate with a larger ball (radius 0.6) inside, cut through the
+ball's centre. Rhino: volume 174.867, the ball skipped. `VerifiedDifference`:
+173.962, the ball cut as a sealed hollow.*
+
 ## What a result must pass
 
 Every piece is a valid closed solid, and:
