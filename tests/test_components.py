@@ -148,6 +148,25 @@ def test_verified_union_component_failures():
     assert out["Status"] == 3 and "input 1 is open" in out["Info"]
 
 
+def test_verified_difference_component():
+    cutters = [_box(1, 1, -1, 2, 2, 3), _box(3, 3, 1, 4, 4, 3), _box(9, 9, 9, 10, 10, 10)]
+    out = run_component("VerifiedDifference", A=_box(0, 0, 0, 6, 6, 2), B=cutters, Tol=0.001)
+    assert out["Status"] == 0 and out["OK"] is True, out["Info"]
+    assert len(out["Solids"]) == 1 and out["Failed"] == []
+    assert "2 of 3 cutters cut the solid" in out["Info"]
+    assert "do not reach the solid: cutter 2" in out["Info"]
+
+
+def test_verified_difference_component_failures():
+    out = run_component("VerifiedDifference")
+    assert out["Status"] == 3 and out["Solids"] == [] and out["OK"] is False
+    opened = _box(1, 1, -1, 2, 2, 3)
+    del opened.Faces[0]
+    out = run_component("VerifiedDifference", A=_box(0, 0, 0, 6, 6, 2), B=[opened, _box(3, 3, 1, 4, 4, 3)])
+    assert out["Status"] == 2 and out["Failed"] == [0] and len(out["Solids"]) == 1
+    assert "cutter 0, the cutter is open" in out["Info"]
+
+
 def test_size_groups_component():
     sides = [1.0, 1.5, 1.02, 2.0, 1.49]
     parts = [rg.Mesh.from_trimesh(shapes.randomly_placed(shapes.box((s, s, s)), shapes.rng(k))[0])
