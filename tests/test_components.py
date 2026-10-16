@@ -124,3 +124,25 @@ def test_profile_fit_component():
     assert out["Profile"].Count > 8
     assert run_component("ProfileFit", M=None)["Status"] == 3
 
+
+
+def _box(x0, y0, z0, x1, y1, z1):
+    return rg.Brep.CreateFromBox(rg.BoundingBox(rg.Point3d(x0, y0, z0), rg.Point3d(x1, y1, z1)))
+
+
+def test_verified_union_component():
+    parts = [_box(0, 0, 0, 1, 1, 1), _box(0, 0, 0, 4, 4, 1), _box(3, 3, 1, 4, 4, 2), _box(8, 8, 8, 9, 9, 9)]
+    out = run_component("VerifiedUnion", B=parts, Tol=0.001)
+    assert out["Status"] == 1 and out["OK"] is True  # one input touches nothing
+    assert len(out["Solids"]) == 2 and out["Failed"] == []
+    assert "3 of 4 inputs united into 1 solid" in out["Info"]
+    assert "solid 0: inputs 0, 1, 2" in out["Info"]
+
+
+def test_verified_union_component_failures():
+    out = run_component("VerifiedUnion")
+    assert out["Status"] == 3 and out["Solids"] == []
+    opened = _box(0, 0, 0, 1, 1, 1)
+    del opened.Faces[0]
+    out = run_component("VerifiedUnion", B=[_box(0, 0, 0, 2, 2, 2), opened])
+    assert out["Status"] == 3 and "input 1 is open" in out["Info"]
