@@ -237,3 +237,12 @@ def test_robust_sweep_component_bad_inputs():
     rail = rg.PolylineCurve([rg.Point3d(0, 0, 0), rg.Point3d(1, 0, 0)])
     assert "no section curves" in run_component("RobustSweep", Rail=rail)["Info"]
     assert "the miter must be" in run_component("RobustSweep", Rail=rail, Sec=[rail], Miter=5)["Info"]
+
+
+def test_dome_cap_component_bad_inputs():
+    # The domes themselves need real Rhino lofts (checked in Rhino); here only the input handling.
+    assert "connect outlines" in run_component("DomeCap")["Info"]
+    part = _box(0, 0, 0, 1, 1, 1)
+    assert "connect a cutting plane" in run_component("DomeCap", B=[part])["Info"]
+    assert "H must be" in run_component("DomeCap", B=[part], H=0.0)["Info"]
+    assert "N must be" in run_component("DomeCap", B=[part], N=0)["Info"]
