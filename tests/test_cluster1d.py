@@ -1,4 +1,4 @@
-from meshwright.core import cluster1d as c1
+from solidwright.core import cluster1d as c1
 
 
 def notes(res):

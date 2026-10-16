@@ -32,9 +32,9 @@ Outputs:
 
 from __future__ import absolute_import, division
 
-from meshwright.core.report import Report
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import convert, dome
+from solidwright.core.report import Report
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import convert, dome
 
 _ns = globals()
 _curves = [c for c in read_input(_ns, "C", []) if c is not None]

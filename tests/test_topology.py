@@ -3,8 +3,8 @@ import math
 import numpy as np
 import pytest
 
-from meshwright.core import topology as topo
-from meshwright.core.report import FAILED, GOOD, MESSY, WARNING
+from solidwright.core import topology as topo
+from solidwright.core.report import FAILED, GOOD, MESSY, WARNING
 
 import shapes
 

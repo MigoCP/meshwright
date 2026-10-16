@@ -1,6 +1,6 @@
 import pytest
 
-from meshwright.core.report import FAILED, GOOD, MESSY, WARNING, Report
+from solidwright.core.report import FAILED, GOOD, MESSY, WARNING, Report
 
 
 def test_empty_report_is_good():

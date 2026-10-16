@@ -1,4 +1,4 @@
-"""Rhino Brep calls for meshwright.core.union_plan.
+"""Rhino Brep calls for solidwright.core.union_plan.
 
 BrepOps answers union_plan's questions with RhinoCommon: Boolean union and
 intersection, volume, bounding box, intersection curves, point inclusion and

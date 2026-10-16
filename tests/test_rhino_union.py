@@ -1,7 +1,7 @@
 import Rhino.Geometry as rg
 
-from meshwright.core import union_plan
-from meshwright.rhino.union import BrepOps
+from solidwright.core import union_plan
+from solidwright.rhino.union import BrepOps
 
 
 def box(x0, y0, z0, x1, y1, z1):

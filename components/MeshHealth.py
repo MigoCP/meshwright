@@ -20,9 +20,9 @@ Outputs:
 
 from __future__ import absolute_import, division
 
-from meshwright.core import topology
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import convert
+from solidwright.core import topology
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import convert
 
 _ns = globals()
 _mesh = read_input(_ns, "M")

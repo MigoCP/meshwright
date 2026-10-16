@@ -31,10 +31,10 @@ Outputs:
 
 from __future__ import absolute_import, division
 
-from meshwright.core import polyhedron, topology
-from meshwright.core.report import Report
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import build, convert
+from solidwright.core import polyhedron, topology
+from solidwright.core.report import Report
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import build, convert
 
 _ns = globals()
 _mesh = read_input(_ns, "M")

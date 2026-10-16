@@ -1,4 +1,4 @@
-"""Apply meshwright.core.deform point maps to Rhino geometry.
+"""Apply solidwright.core.deform point maps to Rhino geometry.
 
 The point maps work in a local frame (z along the axis); a Plane gives that
 frame. Each piece of geometry is copied and morphed through a SpaceMorph

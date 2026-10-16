@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from meshwright.core import fit
+from solidwright.core import fit
 
 import shapes
 

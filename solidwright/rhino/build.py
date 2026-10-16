@@ -14,7 +14,7 @@ from ..core.report import Report
 
 
 def polyhedron_to_brep(poly, tolerance):
-    """(brep, report) for a meshwright.core.polyhedron.Polyhedron.
+    """(brep, report) for a solidwright.core.polyhedron.Polyhedron.
 
     The Brep is closed and points outward, or None when Rhino could not make
     a closed solid from the faces (the report says why).

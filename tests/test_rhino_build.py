@@ -1,8 +1,8 @@
 import Rhino.Geometry as rg
 
-from meshwright.core import polyhedron as ph
-from meshwright.core import rebuild
-from meshwright.rhino import build
+from solidwright.core import polyhedron as ph
+from solidwright.core import rebuild
+from solidwright.rhino import build
 
 import shapes
 

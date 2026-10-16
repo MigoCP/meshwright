@@ -42,10 +42,10 @@ import math
 
 import Rhino.Geometry as rg
 
-from meshwright.core import deform as core
-from meshwright.core.report import Report
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import convert, deform
+from solidwright.core import deform as core
+from solidwright.core.report import Report
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import convert, deform
 
 _ns = globals()
 _items = [g for g in read_input(_ns, "G", []) if g is not None]

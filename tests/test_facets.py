@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from meshwright.core import facets as fac
+from solidwright.core import facets as fac
 
 import shapes
 

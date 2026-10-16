@@ -2,10 +2,10 @@ import math
 
 import pytest
 
-from meshwright.core import polyhedron as ph
-from meshwright.core import rebuild as rb
-from meshwright.core import vec
-from meshwright.core.topology import EdgeCensus, signed_volume
+from solidwright.core import polyhedron as ph
+from solidwright.core import rebuild as rb
+from solidwright.core import vec
+from solidwright.core.topology import EdgeCensus, signed_volume
 
 import shapes
 

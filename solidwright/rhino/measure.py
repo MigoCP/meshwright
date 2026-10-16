@@ -1,4 +1,4 @@
-"""Sizes of Rhino geometry for meshwright.core.cluster1d.
+"""Sizes of Rhino geometry for solidwright.core.cluster1d.
 
 A closed mesh or a closed Brep is measured by its volume, anything else by
 its area. Volume works for parts in any orientation (tilted parts on a

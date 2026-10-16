@@ -1,13 +1,13 @@
-"""A small stand-in for the parts of RhinoCommon that meshwright's adapters use.
+"""A small stand-in for the parts of RhinoCommon that solidwright's adapters use.
 
 Rhino is not available in CI, so tests install this module as `Rhino`,
 `Rhino.Geometry` and `Rhino.Geometry.Intersect`. It mimics names and behaviour
-closely enough for the thin adapters in meshwright.rhino, and nothing more.
+closely enough for the thin adapters in solidwright.rhino, and nothing more.
 
 Covered: Point3d, Point3f, Vector3d, Plane, Transform, Polyline, Line, PolylineCurve,
 Mesh (Vertices, Faces, TopologyVertices), Intersect.Intersection.MeshPlane and
 a polygon-soup Brep: just enough of Brep (planar faces, join, from mesh, merge
-coplanar faces, solid tests) to exercise meshwright.rhino.build. Set
+coplanar faces, solid tests) to exercise solidwright.rhino.build. Set
 Brep.fail_planar = True to make CreatePlanarBreps fail, as it can in Rhino.
 Booleans, BoundingBox, VolumeMassProperties and Intersection.BrepBrep work
 for Breps made of axis-aligned boxes (Brep.CreateFromBox), on a grid of cells.

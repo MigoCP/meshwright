@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "meshwright"
+name = "solidwright"
 version = "0.1.0"
 description = "Turn rough meshes into clean, verified solids for Rhino and Grasshopper."
 readme = "README.md"
@@ -15,7 +15,7 @@ dependencies = []
 test = ["pytest", "numpy", "scipy"]
 
 [tool.setuptools.packages.find]
-include = ["meshwright*"]
+include = ["solidwright*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

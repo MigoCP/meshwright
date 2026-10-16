@@ -1,7 +1,7 @@
 """Rhino mesh to plain lists and back, plus document tolerance.
 
 The only module that knows how RhinoCommon stores meshes. Everything it
-returns is plain Python, ready for meshwright.core.
+returns is plain Python, ready for solidwright.core.
 """
 
 from __future__ import absolute_import, division

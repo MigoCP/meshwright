@@ -28,10 +28,10 @@ Outputs:
 
 from __future__ import absolute_import, division
 
-from meshwright.core import union_plan
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import convert
-from meshwright.rhino.union import BrepOps
+from solidwright.core import union_plan
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import convert
+from solidwright.rhino.union import BrepOps
 
 _ns = globals()
 _breps = list(read_input(_ns, "B", []))

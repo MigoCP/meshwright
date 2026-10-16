@@ -1,7 +1,7 @@
 import Rhino.Geometry as rg
 
-from meshwright.core import topology
-from meshwright.rhino import convert
+from solidwright.core import topology
+from solidwright.rhino import convert
 
 import shapes
 

@@ -2,10 +2,10 @@ import math
 
 import pytest
 
-from meshwright.core import poly2d
-from meshwright.core import polyhedron as ph
-from meshwright.core import sections as sc
-from meshwright.core import vec
+from solidwright.core import poly2d
+from solidwright.core import polyhedron as ph
+from solidwright.core import sections as sc
+from solidwright.core import vec
 
 import shapes
 

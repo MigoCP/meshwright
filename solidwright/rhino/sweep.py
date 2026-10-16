@@ -80,7 +80,7 @@ def _brep_list(breps):
 
 
 class RhinoRail(object):
-    """A Rhino curve as the rail meshwright.core.frames expects."""
+    """A Rhino curve as the rail solidwright.core.frames expects."""
 
     def __init__(self, curve):
         self.curve = curve

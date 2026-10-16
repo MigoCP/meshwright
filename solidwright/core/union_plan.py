@@ -30,7 +30,7 @@ whether the piece lies inside the other. Pieces that touch nothing stay separate
 whether two pieces touch is decided by their intersection curves.
 
 The geometry calls are passed in as an ops object (see Ops), so this module
-needs no Rhino; meshwright.rhino.union provides the Brep version.
+needs no Rhino; solidwright.rhino.union provides the Brep version.
 """
 
 from __future__ import absolute_import, division

@@ -4,7 +4,7 @@ import pytest
 
 import shapes
 
-from meshwright.core import poly2d
+from solidwright.core import poly2d
 
 
 def test_hull_drops_inner_and_collinear_points():

@@ -27,10 +27,10 @@ Outputs:
 
 from __future__ import absolute_import, division
 
-from meshwright.core import cluster1d
-from meshwright.core.report import Report
-from meshwright.gh.io import read_input, show_report, tree
-from meshwright.rhino import measure
+from solidwright.core import cluster1d
+from solidwright.core.report import Report
+from solidwright.gh.io import read_input, show_report, tree
+from solidwright.rhino import measure
 
 _ns = globals()
 _parts = list(read_input(_ns, "G", []))

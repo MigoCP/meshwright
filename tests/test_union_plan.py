@@ -5,7 +5,7 @@ neighbour is in, or until the piece is nudged), one that drops an input, one
 that returns an open solid.
 """
 
-from meshwright.core import union_plan as up
+from solidwright.core import union_plan as up
 
 
 def block(x0, y0, z0, x1, y1, z1, name=None):

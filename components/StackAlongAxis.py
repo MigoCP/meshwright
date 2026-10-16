@@ -25,10 +25,10 @@ from __future__ import absolute_import, division
 
 import Rhino.Geometry as rg
 
-from meshwright.core import layout, vec
-from meshwright.core.report import Report
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import convert, measure
+from solidwright.core import layout, vec
+from solidwright.core.report import Report
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import convert, measure
 
 _ns = globals()
 _items = list(read_input(_ns, "G", []))

@@ -1,6 +1,6 @@
 import math
 
-from meshwright.core import deform
+from solidwright.core import deform
 
 
 def close(a, b, eps=1e-12):

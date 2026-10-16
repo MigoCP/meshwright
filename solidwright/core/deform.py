@@ -2,7 +2,7 @@
 
 Every map works in a local frame: z runs along the axis, x and y across it,
 and the axis passes through x = y = 0. Each map takes a point (x, y, z) and
-returns the moved point; meshwright.rhino.deform applies one to Breps and
+returns the moved point; solidwright.rhino.deform applies one to Breps and
 meshes as a Rhino SpaceMorph.
 
     Compress  squeeze (or stretch) everything above a start height along the axis

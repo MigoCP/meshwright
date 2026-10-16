@@ -27,10 +27,10 @@ from __future__ import absolute_import, division
 
 import Rhino.Geometry as rg
 
-from meshwright.core import orient, sections, topology, vec
-from meshwright.core.report import Report
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import convert
+from solidwright.core import orient, sections, topology, vec
+from solidwright.core.report import Report
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import convert
 
 _ns = globals()
 _mesh = read_input(_ns, "M")

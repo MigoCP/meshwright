@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 from scipy.spatial import ConvexHull, HalfspaceIntersection
 
-from meshwright.core import polyhedron as ph
-from meshwright.core import vec
-from meshwright.core.facets import cluster_planes
+from solidwright.core import polyhedron as ph
+from solidwright.core import vec
+from solidwright.core.facets import cluster_planes
 
 import shapes
 
@@ -464,7 +464,7 @@ def test_faces_with_holes_measure_right():
 
 
 def test_triangles_of_faces_with_holes_close_the_solid():
-    from meshwright.core.topology import EdgeCensus, signed_volume
+    from solidwright.core.topology import EdgeCensus, signed_volume
     v, tris = square_frame().triangles()
     assert EdgeCensus(tris).closed
     assert abs(signed_volume(v, tris) - 3.0) < 1e-12

@@ -3,9 +3,9 @@ import math
 import numpy as np
 import pytest
 
-from meshwright.core import orient
-from meshwright.core.facets import cluster_planes
-from meshwright.core.report import FAILED, GOOD, MESSY, WARNING
+from solidwright.core import orient
+from solidwright.core.facets import cluster_planes
+from solidwright.core.report import FAILED, GOOD, MESSY, WARNING
 
 import shapes
 

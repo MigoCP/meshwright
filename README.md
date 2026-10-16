@@ -1,14 +1,14 @@
-# meshwright
+# solidwright
 
 Turn rough meshes into clean, verified solids for Rhino and Grasshopper.
 
-![A noisy mesh, Rhino's ToNURBS + MergeAllCoplanarFaces result and meshwright's MeshToSolid result turning side by side, one colour per Brep face](docs/demo.gif)
+![A noisy mesh, Rhino's ToNURBS + MergeAllCoplanarFaces result and solidwright's MeshToSolid result turning side by side, one colour per Brep face](docs/demo.gif)
 
 *A noisy mesh of a plate with a round hole, rebuilt by Rhino (74 faces, its big
-faces left split into pieces) and by meshwright's `MeshToSolid` (30 faces, one
+faces left split into pieces) and by solidwright's `MeshToSolid` (30 faces, one
 per flat region). Each Brep face has its own colour. Captured in Rhino 8.*
 
-meshwright is a set of Grasshopper components and the Python library behind
+solidwright is a set of Grasshopper components and the Python library behind
 them. It checks meshes, finds how a part sits, rebuilds faceted meshes as
 exact solids, builds clearance solids around parts, and wraps a few Rhino
 operations that fail quietly (Boolean union, Sweep1) in checks that say
@@ -66,11 +66,11 @@ Warnings and errors also show as the component's orange or red balloon.
 
 ## Install
 
-meshwright is plain Python with no dependencies. Download or clone this
-repository, then make the `meshwright` folder (the one inside the
+solidwright is plain Python with no dependencies. Download or clone this
+repository, then make the `solidwright` folder (the one inside the
 repository, holding `core`, `rhino` and `gh`) importable:
 
-- **Rhino 8**: copy the `meshwright` folder into
+- **Rhino 8**: copy the `solidwright` folder into
   `%APPDATA%\McNeel\Rhinoceros\8.0\scripts`. Rhino 8 puts that folder on the
   search path of both its Pythons (IronPython 2 and Python 3); checked with
   `RunPythonScript` in each.
@@ -79,7 +79,7 @@ repository, holding `core`, `rhino` and `gh`) importable:
 
   ```python
   import sys
-  sys.path.append(r"C:\path\to\meshwright-repository")
+  sys.path.append(r"C:\path\to\solidwright-repository")
   ```
 
 Rhino keeps imported modules loaded for the whole session, so restart Rhino
@@ -111,7 +111,7 @@ component.
 geometry, from a Python script that feeds it inputs the way Grasshopper
 does.
 
-The library itself (`meshwright.core`) is tested in CI on Python 3.9 and
+The library itself (`solidwright.core`) is tested in CI on Python 3.9 and
 3.12 and is written to run unchanged in IronPython 2.7.
 
 ## Principles
@@ -119,9 +119,9 @@ The library itself (`meshwright.core`) is tested in CI on Python 3.9 and
 - **Every result is graded.** Tools return a report with a status (0 good,
   1 warning, 2 messy, 3 failed) and readable reasons, instead of raising or
   quietly handing back bad geometry.
-- **Pure-Python core.** `meshwright.core` has no Rhino and no numpy imports, so
+- **Pure-Python core.** `solidwright.core` has no Rhino and no numpy imports, so
   it runs in GHPython (IronPython 2.7), Rhino 8 CPython and plain CPython.
-  Thin adapters in `meshwright.rhino` convert to and from RhinoCommon.
+  Thin adapters in `solidwright.rhino` convert to and from RhinoCommon.
 - **Tested without Rhino.** Tests use procedural geometry and a small mock of
   the RhinoCommon pieces the adapters touch.
 
@@ -140,7 +140,7 @@ the origin, as an STL export there would be.
 *Corners off* is how far the result's corners are from the true solid (the
 largest distance, in model units).
 
-| Part | Mesh | Right faces | meshwright faces | corners off | time | Rhino faces | corners off | time |
+| Part | Mesh | Right faces | solidwright faces | corners off | time | Rhino faces | corners off | time |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | box | noise 1e-4 | 6 | 6 | 7.5e-5 | 0.01 s | 6 | 1.6e-4 | 0.06 s |
 | L block | noise 1e-4 | 8 | 8 | 1.3e-4 | 0.02 s | 8 | 1.8e-4 | 0.13 s |
@@ -157,27 +157,27 @@ largest distance, in model units).
 
 - **Clean meshes:** both give the same faces and edges, and both are exact
   (corners within 2e-14).
-- **Light noise (1e-5):** both find the right faces. meshwright's corners
+- **Light noise (1e-5):** both find the right faces. solidwright's corners
   are 1.1 to 2.5 times closer, because each corner is solved from the
   refitted planes that meet there instead of being taken from one noisy
   vertex.
 - **Heavier noise (1e-4) and single precision far from the origin:**
   Rhino leaves faces split into pieces on the parts with many or narrow
-  faces. meshwright keeps them whole by joining neighbouring pieces while
+  faces. solidwright keeps them whole by joining neighbouring pieces while
   they stay flat within half the tolerance. Its corners are closer in every
   case, up to 6 times.
 - **Validity:** every result from both is a valid closed solid with no open
-  edges. The largest edge tolerance in a meshwright result was 7.9e-5 (the
+  edges. The largest edge tolerance in a solidwright result was 7.9e-5 (the
   noisy faceted part); Rhino's were 0.
 - **A Rhino-meshed CAD part** (a box with a cylinder hole, single precision
-  render mesh): both give 46 faces; corners off 1.6e-7 (meshwright) and
+  render mesh): both give 46 faces; corners off 1.6e-7 (solidwright) and
   3.4e-7 (Rhino).
 - **Speed:** times are for Rhino 8's CPython. In IronPython (GHPython)
-  meshwright took about the same, after about 0.3 s of start-up on its
+  solidwright took about the same, after about 0.3 s of start-up on its
   first run. The real `ToNURBS` and `MergeAllCoplanarFaces` commands gave
   the same results as their RhinoCommon calls, slightly slower.
 - **Noise beyond the tolerance:** when the noise is too large for faces to
-  be flat within half the tolerance, meshwright cannot join them either. It
+  be flat within half the tolerance, solidwright cannot join them either. It
   then reports that the mesh looks noisier than the tolerance instead of
   grading the result good.
 
@@ -197,7 +197,7 @@ Short notes on the problems that took the most thought, with numbers:
 ## Layout
 
 ```
-meshwright/
+solidwright/
   core/     pure Python geometry: no Rhino, no numpy (IronPython 2.7 and Python 3)
   rhino/    thin adapters between RhinoCommon and the core
   gh/       input and message helpers for Grasshopper components

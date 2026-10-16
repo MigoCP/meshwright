@@ -70,7 +70,7 @@ tells you when it does not.
 
 ## Testing without Rhino
 
-The scheduler in `meshwright.core.union_plan` never calls Rhino. It takes the
+The scheduler in `solidwright.core.union_plan` never calls Rhino. It takes the
 geometry calls (union, volume, bounding box, intersection, touching, moving)
 as an object, so the tests use stand-in solids made of unit cubes, where
 union and volume are exact, and play Rhino's failures on purpose: a union

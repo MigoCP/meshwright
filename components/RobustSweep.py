@@ -28,8 +28,8 @@ Outputs:
 
 from __future__ import absolute_import, division
 
-from meshwright.gh.io import read_input, show_report
-from meshwright.rhino import convert, sweep
+from solidwright.gh.io import read_input, show_report
+from solidwright.rhino import convert, sweep
 
 _ns = globals()
 _rail = read_input(_ns, "Rail")

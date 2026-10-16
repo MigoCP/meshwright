@@ -20,7 +20,7 @@ import re
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PACKAGE = os.path.join(ROOT, "meshwright")
+PACKAGE = os.path.join(ROOT, "solidwright")
 THIS_FILE = os.path.abspath(__file__)
 
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", "build", "dist"}

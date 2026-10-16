@@ -1,6 +1,6 @@
 """Graded results.
 
-Every meshwright tool that can go wrong returns a Report next to its result,
+Every solidwright tool that can go wrong returns a Report next to its result,
 instead of raising or quietly handing back bad geometry. A Report holds a
 status and the reasons behind it:
 

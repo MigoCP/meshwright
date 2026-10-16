@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from meshwright.core import vec
+from solidwright.core import vec
 
 import shapes
 

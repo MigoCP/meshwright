@@ -6,7 +6,7 @@ would, with no twist the rail did not ask for. Frames are marched with the
 double reflection method (Wang, Juettler, Zheng and Liu, 2008), which is
 exact for circles and helices and very close elsewhere.
 
-The rail is any object with these members (meshwright.rhino.sweep wraps a
+The rail is any object with these members (solidwright.rhino.sweep wraps a
 Rhino curve; tests use exact circles and helices):
 
     domain               (t0, t1)

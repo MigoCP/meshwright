@@ -249,7 +249,7 @@ def l_block(size=2.0, notch=1.0, height=1.0):
 
 def prism_with_holes(outline, holes, height=1.0):
     """Closed prism over a 2D outline with holes running right through it."""
-    from meshwright.core import poly2d
+    from solidwright.core import poly2d
 
     def ccw(loop, want_ccw):
         a = poly2d.signed_area(loop)

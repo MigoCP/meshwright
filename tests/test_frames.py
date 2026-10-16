@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from meshwright.core import frames as fr
-from meshwright.core import vec
+from solidwright.core import frames as fr
+from solidwright.core import vec
 
 
 class Analytic(object):
