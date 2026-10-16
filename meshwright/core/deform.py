@@ -9,8 +9,8 @@ meshes as a Rhino SpaceMorph.
     Curl      roll everything above a start height in towards the axis (or out)
     RadialFit scale radially so one outline lands on another, fading out above a height
 
-dome_levels() gives the scale and height of the sections of a rounded cap on
-a flat outline.
+dome_height() and dome_levels() give the height of a rounded cap on a flat
+outline and the scale and height of its sections.
 """
 
 from __future__ import absolute_import, division
@@ -187,6 +187,12 @@ def ray_hit(polygon, direction):
         if t > 0.0 and -1e-12 <= u <= 1.0 + 1e-12 and (best is None or t < best):
             best = t
     return best
+
+
+def dome_height(area, ratio):
+    """Height of a cap over an outline of this area: ratio times the radius of a
+    circle with the same area (ratio 1 over a circle gives a half ball)."""
+    return ratio * math.sqrt(area / math.pi)
 
 
 def dome_levels(height, steps=6):

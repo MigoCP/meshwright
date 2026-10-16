@@ -75,3 +75,8 @@ def test_ray_hit_and_dome_levels():
     assert abs(deform.ray_hit(square(1.0), (math.sqrt(0.5), math.sqrt(0.5))) - math.sqrt(2.0)) < 1e-12
     levels = deform.dome_levels(2.0, steps=2)
     assert close(levels[0], (math.cos(math.pi / 6), 1.0)) and close(levels[1], (0.5, 2.0 * math.sin(math.pi / 3)))
+
+
+def test_dome_height_matches_a_half_ball_over_a_circle():
+    assert abs(deform.dome_height(math.pi * 4.0, 1.0) - 2.0) < 1e-12
+    assert abs(deform.dome_height(math.pi, 0.5) - 0.5) < 1e-12
