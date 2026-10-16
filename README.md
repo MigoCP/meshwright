@@ -2,8 +2,11 @@
 
 Turn rough meshes into clean, verified solids for Rhino and Grasshopper.
 
-<!-- Demo GIF goes here: docs/demo.gif -->
-*(A short demo GIF is coming.)*
+![A noisy mesh, Rhino's ToNURBS + MergeAllCoplanarFaces result and meshwright's MeshToSolid result turning side by side, one colour per Brep face](docs/demo.gif)
+
+*A noisy mesh of a plate with a round hole, rebuilt by Rhino (74 faces, its big
+faces left split into pieces) and by meshwright's `MeshToSolid` (30 faces, one
+per flat region). Each Brep face has its own colour. Captured in Rhino 8.*
 
 meshwright is a set of Grasshopper components and the Python library behind
 them. It checks meshes, finds how a part sits, rebuilds faceted meshes as
